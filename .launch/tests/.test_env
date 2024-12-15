@@ -1,0 +1,32 @@
+# General settings
+# ------------------------------------------------------------------------------
+LAUNCH_MODE=TEST
+PROJECT_NAME=Test
+READ_ENV=True
+DEBUG=True
+SECRET_KEY=OpypRaBHOiRSEQRp-wHEEEnq1euQQNqcmQBrD-Lb-G42lrXgREsnFQ3jKSugRKun
+CORS_ORIGIN_WHITELIST=["*"]
+DATABASE_ROWS_LIMIT=1000
+BATCH_SIZE=50
+
+
+# DATABASE settings
+# ------------------------------------------------------------------------------
+CONNECTIONS_POOL_MIN_SIZE=10
+CONNECTIONS_POOL_MAX_OVERFLOW=25
+SHOW_SQL=False
+DB_HOST=172.17.0.1
+DB_PORT=5450
+DB_USER=dev
+DB_PASSWORD=dev
+DB_NAME=test_db
+
+
+# Redis
+# ------------------------------------------------------------------------------
+REDIS_URL=redis://172.17.0.1:6389/0
+
+# Celery
+# ------------------------------------------------------------------------------
+CELERY_BROKER_URL=redis://172.17.0.1:6389/11
+CELERY_RESULT_BACKEND=redis://172.17.0.1:6389/12

@@ -1,0 +1,19 @@
+FROM python:3.12.0-slim
+
+# env variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+RUN mkdir /app
+WORKDIR /app
+COPY . /app/
+RUN pip install --upgrade pip
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install
+CMD alembic upgrade head
+
+
+ENV PYTHONPATH=/app
+
+CMD alembic upgrade head && sudo -u celery celery -A src.app.extensions.celery_ext.celery_app $CELERY_ARGS
