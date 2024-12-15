@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
 
-from src.app.api.v1.dependencies import auth_api_key_schema, validate_api_key
+from src.app.api.v1.dependencies import validate_api_key
 from src.app.api.v1.endpoints.auth.schemas.req_schemas import SignUpReq
 from src.app.api.v1.endpoints.auth.schemas.req_schemas import TokenReq
 from src.app.api.v1.endpoints.auth.schemas.resp_schemas import SignupResp, TokenResp
@@ -13,9 +13,7 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post(path="/sign-up/", response_model=SignupResp, name="sign-up")
-async def sign_up(
-    data: Annotated[SignUpReq, Body()]
-) -> dict:
+async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
 
     user = await services_container.auth_service.create_auth_user(data=data.dict())
 

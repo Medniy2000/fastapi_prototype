@@ -18,17 +18,15 @@ default_exchange = Exchange("default", type="direct")
 default_queue = "default_queue"
 
 task_queues = (
-        Queue(
-            name=default_queue,
-            exchange=default_exchange,
-            routing_key=default_queue,
-        ),
+    Queue(
+        name=default_queue,
+        exchange=default_exchange,
+        routing_key=default_queue,
+    ),
 )
 
 
-imports = (
-    "src.app.core.tasks.example_task",
-)
+imports = ("src.app.core.tasks.example_task",)
 
 TASKS: dict = {
     "example_task": {
