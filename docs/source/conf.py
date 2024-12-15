@@ -19,9 +19,9 @@ sys.path.insert(0, os.path.abspath("../../"))
 # -- Project information -----------------------------------------------------
 
 
-project = "Commission Engine Core"
-copyright = "2023, AnyforSoft Team"
-author = "AnyforSoft Team"
+project = "Proto Documentation"
+copyright = "2024, Dev Team"
+author = " Dev Team"
 
 
 # -- General configuration ---------------------------------------------------
