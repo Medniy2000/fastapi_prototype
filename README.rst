@@ -1,4 +1,4 @@
-Commission Engine Core
+README
 =======================
 
 Example description:
