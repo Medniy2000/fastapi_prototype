@@ -64,6 +64,12 @@ class SettingsBase(PydanticSettings):
     # Redis Settings
     # --------------------------------------------------------------------------
     REDIS_URL = env.str("REDIS_URL", "")
+    
+    # Message Broker Settings
+    # --------------------------------------------------------------------------
+    MESSAGE_BROKER_URL: str = env.str("MESSAGE_BROKER_URL", None)
+    DEFAULT_EXCHANGER: str = env.str("DEFAULT_EXCHANGER", None)
+    DEFAULT_QUEUE: str = env.str("DEFAULT_QUEUE", 0)
 
 
 class SettingsLocal(SettingsBase):
