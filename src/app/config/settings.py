@@ -64,7 +64,7 @@ class SettingsBase(PydanticSettings):
     # Redis Settings
     # --------------------------------------------------------------------------
     REDIS_URL = env.str("REDIS_URL", "")
-    
+
     # Message Broker Settings
     # --------------------------------------------------------------------------
     MESSAGE_BROKER_URL: str = env.str("MESSAGE_BROKER_URL", None)

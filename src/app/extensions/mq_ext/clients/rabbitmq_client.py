@@ -11,25 +11,21 @@ from loguru import logger
 
 class RabbitQueueClientClient:
     __message_broker_url: str
-    
+
     __connection_pool: Pool
     __message_reconnect_timeout: int = 60
     __connections_pool_max_size = 5
-    
+
     __channel_pool: Pool
     __channel_pool_max_size = 10
-    
+
     __handlers_by_event: dict
     __aggregator: Callable
-    
+
     def __init__(self, message_broker_url: str) -> None:
         self.message_broker_url = message_broker_url
-        self.__connection_pool: Pool = Pool(
-            self.__get_connection, max_size=self.__connections_pool_max_size
-        )
-        self.__channel_pool: Pool = Pool(
-            self.__get_channel, max_size=self.__channel_pool_max_size
-        )
+        self.__connection_pool: Pool = Pool(self.__get_connection, max_size=self.__connections_pool_max_size)
+        self.__channel_pool: Pool = Pool(self.__get_channel, max_size=self.__channel_pool_max_size)
 
     async def __get_connection(self) -> AbstractRobustConnection:
         while True:
@@ -57,13 +53,9 @@ class RabbitQueueClientClient:
                 await self.__aggregator(message_json, self.__handlers_by_event)
         except Exception as e:  # noqa
             logger.warning(f"Got message with incorrect data! {e}")
-    
+
     async def produce_messages(
-            self,
-            messages: List[dict],
-            queue_name: str,
-            exchanger_name: str,
-            **kwargs: dict
+        self, messages: List[dict], queue_name: str, exchanger_name: str, **kwargs: dict
     ) -> None:
         exchange_type = kwargs.get("exchange_type", aio_pika.exchange.ExchangeType.DIRECT)
         async with self.__channel_pool.acquire() as channel:
@@ -74,17 +66,17 @@ class RabbitQueueClientClient:
             for message in messages:
                 message_ = json.dumps(message, ensure_ascii=False)
                 await exchanger_.publish(aio_pika.Message(body=message_.encode()), routing_key=queue_name)
-    
+
     async def consume(
-            self,
-            queues: List[str | int],
-            exchanger_name: str,
-            aggregator: Callable,
-            handlers_by_event: dict,
-            **kwargs: dict
-    ):
+        self,
+        queues: List[str | int],
+        exchanger_name: str,
+        aggregator: Callable,
+        handlers_by_event: dict,
+        **kwargs: dict,
+    ) -> None:
         exchange_type = kwargs.get("exchange_type", aio_pika.exchange.ExchangeType.DIRECT.value)
-        
+
         queues_str = "|".join(str(queue) for queue in queues)
         logger.info(f"Queue {queues_str}|{exchanger_name}|{exchange_type} consume starting..")
 
@@ -106,8 +98,8 @@ class RabbitQueueClientClient:
                 )
                 await queue_.bind(exchanger)
                 queues_.append(queue_)
-            
+
             for i in queues_:
                 await i.consume(self.__callback)
-            
+
             await asyncio.Future()

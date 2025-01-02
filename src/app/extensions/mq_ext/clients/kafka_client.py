@@ -8,20 +8,14 @@ import pytz
 
 class KafkaClient:
     __message_broker_url: str
-    
+
     __request_timeout_ms = 1000 * 50  # 50 seconds
     __retry_backoff_ms = 1000 * 20  # 10 seconds
-    
+
     def __init__(self, message_broker_url: str) -> None:
         self.message_broker_url = message_broker_url
-    
-    async def produce_messages(
-            self,
-            topic: str,
-            partition: int,
-            messages: List[dict],
-            **kwargs: dict
-    ) -> None:
+
+    async def produce_messages(self, topic: str, partition: int, messages: List[dict], **kwargs: dict) -> None:
         producer = AIOKafkaProducer(
             bootstrap_servers=self.message_broker_url,
             request_timeout_ms=self.__request_timeout_ms,
@@ -39,8 +33,8 @@ class KafkaClient:
                 )
         finally:
             await producer.stop()
-            
-    async def __callback(self, message: ConsumerRecord, aggregator: Callable,  handlers_by_event: dict) -> None:
+
+    async def __callback(self, message: ConsumerRecord, aggregator: Callable, handlers_by_event: dict) -> None:
         """
         Callback for queue consuming
         Processes received messages via queue
@@ -51,17 +45,11 @@ class KafkaClient:
             await aggregator(message_json, handlers_by_event)
         except Exception as e:  # noqa
             logger.warning(
-                f"Got message with incorrect data! {e} "
-                f"[{message.topic}*{message.partition}*{message.offset}]"
+                f"Got message with incorrect data! {e} " f"[{message.topic}*{message.partition}*{message.offset}]"
             )
 
     async def consume(
-            self,
-            topic: str,
-            partitions: List[int],
-            aggregator: Callable,
-            handlers_by_event: dict,
-            **kwargs: dict
+        self, topic: str, partitions: List[int], aggregator: Callable, handlers_by_event: dict, **kwargs: dict
     ) -> None:
         partitions_str = "*".join(str(i) for i in partitions)
         auto_offset_reset = kwargs.get("auto_offset_reset", "latest") or "latest"
@@ -72,11 +60,9 @@ class KafkaClient:
             auto_offset_reset=auto_offset_reset,
             enable_auto_commit=enable_auto_commit,
             request_timeout_ms=self.__request_timeout_ms,
-            retry_backoff_ms=self.__retry_backoff_ms
+            retry_backoff_ms=self.__retry_backoff_ms,
         )
-        partitions_ = [
-            TopicPartition(topic, partition) for partition in partitions
-        ]
+        partitions_ = [TopicPartition(topic, partition) for partition in partitions]
         consumer.assign(partitions_)
         try:
             partitions_str = "*".join(str(queue) for queue in partitions)
