@@ -1,15 +1,12 @@
-README
-=======================
+Readme
+============
 
-Example description:
+Real world project example based on FastAPI, Celery, Consumer[RabbitMQ, Kafka]
 
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
      :target: https://github.com/ambv/black
      :alt: Black code style
 
-
-Run app local
-^^^^^^^^^^^^^^
 
 To run app local use::
 
@@ -27,6 +24,9 @@ To run app local use::
 
     # Run Celery
     # celery -A src.app.extensions.celery_ext.celery_app worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h
+
+    # Run consumer
+    # python -m src.app.consume
 
 
 API docs here::
@@ -60,10 +60,6 @@ Docs commands::
     $ make html
     # open /docs/build/index.html
 
-Run tests::
-
-    $
-
 To run app using Docker::
 
     $ cd <path_to>/{your_project_name}
@@ -76,6 +72,11 @@ To run app using Docker::
     # build, run API
     $ docker build -t api_img --no-cache -f .launch/api/Dockerfile .
     $ docker run -d --env-file ./.env --name my_local_api --shm-size="1g" --cpus=1 -p 8081:8081 api_img
+
+    # build, run Consumer
+    $ docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
+    $ docker run -d --env-file .env --name my_local_consume --shm-size="512m" --cpus=1 consume_img
+
 Run tests::
 
     # run tests
