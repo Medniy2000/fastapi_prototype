@@ -39,12 +39,12 @@ class SettingsBase(PydanticSettings):
     API_DEFAULT_LIMIT: int = env.int("API_DEFAULT_LIMIT", 25)
     API_LIMIT_ALLOWED_VALUES_LIST: List[int] = env.list("API_LIMIT_ALLOWED_VALUES_LIST", [1, 5, 10, 15, 25])
     SHOW_API_DOCS: bool = env.bool("SHOW_API_DOCS", False)
-    
+
     # GRPC Settings
     # --------------------------------------------------------------------------
     GRPC_HOST: Optional[str] = env.str("GRPC_HOST", "")
     GRPC_PORT: Optional[int] = env.int("GRPC_PORT", None)
-    GRPC_URL: str = f"{GRPC_HOST}:{int(GRPC_PORT)}"
+    GRPC_URL: str = f"{GRPC_HOST}:{int(GRPC_PORT)}"  # type: ignore
 
     # Auth settings
     # --------------------------------------------------------------------------
@@ -92,7 +92,7 @@ class SettingsProd(SettingsBase):
 
 class LaunchMode(str, Enum):
     LOCAL = "LOCAL"
-    PRODUCTION = "PROD"
+    PROD = "PROD"
     TEST = "TEST"
 
 

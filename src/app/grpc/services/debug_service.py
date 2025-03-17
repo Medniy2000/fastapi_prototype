@@ -8,22 +8,17 @@ from src.app.grpc.pb.debug.debug_pb2_grpc import DebugServiceServicer
 from src.app.grpc.pb.debug import debug_pb2 as pb2
 from google.protobuf.json_format import MessageToJson
 
-class DebugService(DebugServiceServicer):
 
-    async def SendMessage(self, request, context) -> pb2.MessageResp:
+class DebugService(DebugServiceServicer):
+    async def SendMessage(self, request, context) -> pb2.MessageResp:  # type: ignore
         data_raw = MessageToJson(request.data) or "{}"
         data = json.loads(data_raw)
-        _ , data_type_ = data.pop("@type", "").split('/')
+        _, data_type_ = data.pop("@type", "").split("/")
         event = request.event
         await mq_client.produce_messages(
-            messages=[
-                {
-                    "event": event,
-                    "data": data
-                }
-            ],
+            messages=[{"event": event, "data": data}],
             queue_name=settings.DEFAULT_QUEUE,
-            exchanger_name=settings.DEFAULT_EXCHANGER
+            exchanger_name=settings.DEFAULT_EXCHANGER,
         )
         logger.debug(f"Sent message `{event}` with data {str(data)}")
-        return pb2.MessageResp(status=True, message="OK")
+        return pb2.MessageResp(status=True, message="OK")  # type: ignore
