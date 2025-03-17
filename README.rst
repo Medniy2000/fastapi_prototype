@@ -80,6 +80,17 @@ To run app using Docker::
 Run tests::
 
     # run tests
-    $ docker-compose -f docker-compose-tests.yml up --abort-on-container-exit
+        $ docker-compose -f docker-compose-tests.yml up --abort-on-container-exit
     # clean up
-    $ docker-compose -f docker-compose-tests.yml rm -fsv && docker rmi $(docker images '*x_test*' -a -q) && docker system prune
+        $ docker-compose -f docker-compose-tests.yml rm -fsv && docker rmi $(docker images '*x_test*' -a -q) && docker system prune
+
+
+GRPC::
+
+    # Generate services
+        $ python -m grpc_tools.protoc --proto_path ./src/app/grpc/protos --python_out=./src/app/grpc/pb/debug --grpc_python_out=./src/app/grpc/pb/debug ./src/app/grpc/protos/debug.proto
+        $ python -m grpc_tools.protoc --proto_path ./src/app/grpc/protos --python_out=./src/app/grpc/pb/example --grpc_python_out=./src/app/grpc/pb/example ./src/app/grpc/protos/example.proto
+    # Run server
+        $ python -m src.app.grpc.server
+    # Run test client
+        $ python -m src.app.grpc.client

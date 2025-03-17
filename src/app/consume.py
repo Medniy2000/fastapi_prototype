@@ -55,5 +55,6 @@ if __name__ == "__main__":
                 handlers_by_event=handlers_by_event_,
             )
         )
+
     except Exception as e:
         logger.warning(f"Error: {str(e)}")

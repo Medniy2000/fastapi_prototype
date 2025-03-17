@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+package grpc.pb.debug;
+
+message SayMeqDataReq {
+
+}
+message TestDataReq {
+  string year = 1;
+  string month = 2;
+}
+
+message MessageReq{
+  string event = 1;
+  google.protobuf.Any data = 2;
+}
+
+message MessageResp {
+  bool status = 1;
+  string message = 2;
+}
+
+service DebugService {
+  rpc SendMessage(MessageReq) returns (MessageResp) {}
+}
