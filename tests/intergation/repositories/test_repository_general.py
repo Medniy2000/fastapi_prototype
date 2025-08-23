@@ -3,8 +3,8 @@ from typing import Any, List, Type
 
 import pytest
 
-from src.app.domain.entities.users import UserEntity
-from src.app.domain.repositories.container import container as repo_container
+from src.app.domain.users.aggregates.users import UserAggregate
+from src.app.core.repositories.container import container as repo_container
 from tests.fixtures.constants import USERS
 
 
@@ -16,7 +16,7 @@ def test_users_get_list_limit_offset_case_1(e_loop: AbstractEventLoop, users: An
     limit = 10
     expected_count = 1  # noqa
 
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"limit": limit, "offset": offset})
     )
     assert isinstance(items, list) is True
@@ -24,7 +24,7 @@ def test_users_get_list_limit_offset_case_1(e_loop: AbstractEventLoop, users: An
 
     raw_ids = [i["id"] for i in USERS]
     for user in items:
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id in raw_ids
 
 
@@ -44,7 +44,7 @@ def test_users_get_list_limit_offset_case_2(e_loop: AbstractEventLoop, users: An
 
     raw_ids = [i["id"] for i in USERS]
     for user in items:
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id in raw_ids
 
 
@@ -54,7 +54,7 @@ def test_users_get_list_limit_offset_case_3(e_loop: AbstractEventLoop, users: An
     offset = count - 2
     limit = 1
     expected_count = 1  # noqa
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"limit": limit, "offset": offset})
     )
     assert isinstance(items, list) is True
@@ -62,7 +62,7 @@ def test_users_get_list_limit_offset_case_3(e_loop: AbstractEventLoop, users: An
 
     raw_ids = [i["id"] for i in USERS]
     for user in items:
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id in raw_ids
 
 
@@ -71,7 +71,7 @@ def test_users_get_list_limit_offset_case_4(e_loop: AbstractEventLoop, users: An
     count = len(USERS)
     offset = 1
     expected_count = count - offset
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"offset": offset})
     )
     assert isinstance(items, list) is True
@@ -79,7 +79,7 @@ def test_users_get_list_limit_offset_case_4(e_loop: AbstractEventLoop, users: An
 
     raw_ids = [i["id"] for i in USERS]
     for user in items:
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id in raw_ids
 
 
@@ -88,12 +88,12 @@ def test_users_get_list_order_by_id_asc(e_loop: AbstractEventLoop, users: Any) -
     USERS_RAW = sorted(USERS, key=lambda i: i["id"])
     count = len(USERS_RAW)
 
-    items: List[UserEntity] = e_loop.run_until_complete(users_repository.get_list(order_data=("id",)))
+    items: List[UserAggregate] = e_loop.run_until_complete(users_repository.get_list(order_data=("id",)))
     assert isinstance(items, list) is True
     assert len(items) == count
 
     for index, user in enumerate(items):
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id == USERS_RAW[index]["id"]
 
 
@@ -102,12 +102,12 @@ def test_users_get_list_order_by_id_desc(e_loop: AbstractEventLoop, users: Any) 
     USERS_RAW = sorted(USERS, key=lambda i: i["id"], reverse=True)
     count = len(USERS_RAW)
 
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(users_repository.get_list(order_data=("-id",)))
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(users_repository.get_list(order_data=("-id",)))
     assert isinstance(items, list) is True
     assert len(items) == count
 
     for index, user in enumerate(items):
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id == USERS_RAW[index]["id"]
 
 
@@ -125,7 +125,7 @@ def test_users_get_list_in_lookup(e_loop: AbstractEventLoop, users: Any, data: d
     field = data["key"]
     lookup = f"{field}__in"
     expected_values = data["value"]
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -149,7 +149,7 @@ def test_users_get_list_gt_lookup(e_loop: AbstractEventLoop, users: Any, data: d
 
     field = data["key"]
     lookup = f"{field}__gt"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -173,7 +173,7 @@ def test_users_get_list_gte_lookup(e_loop: AbstractEventLoop, users: Any, data: 
 
     field = data["key"]
     lookup = f"{field}__gt"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -197,7 +197,7 @@ def test_users_get_list_lt_lookup(e_loop: AbstractEventLoop, users: Any, data: d
 
     field = data["key"]
     lookup = f"{field}__lt"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -221,7 +221,7 @@ def test_users_get_list_lte_lookup(e_loop: AbstractEventLoop, users: Any, data: 
 
     field = data["key"]
     lookup = f"{field}__lte"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -246,7 +246,7 @@ def test_users_get_list_e_lookup_case_1(e_loop: AbstractEventLoop, users: Any, d
 
     field = data["key"]
     lookup = f"{field}__e"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -263,7 +263,7 @@ def test_users_get_list_e_lookup_case_2(e_loop: AbstractEventLoop, users: Any, d
 
     field = data["key"]
     lookup = field
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -288,7 +288,7 @@ def test_users_get_list_ne_lookup(e_loop: AbstractEventLoop, users: Any, data: d
 
     field = data["key"]
     lookup = f"{field}__ne"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -313,7 +313,7 @@ def test_users_get_list_not_in_lookup(e_loop: AbstractEventLoop, users: Any, dat
 
     field = data["key"]
     lookup = f"{field}__not_in"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -345,7 +345,7 @@ def test_users_get_list_like_lookup(e_loop: AbstractEventLoop, users: Any, data:
 
     field = data["key"]
     lookup = f"{field}__like"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -372,7 +372,7 @@ def test_users_get_list_not_like_all_lookup(e_loop: AbstractEventLoop, users: An
 
     field = data["key"]
     lookup = f"{field}__not_like_all"
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={lookup: data["value"]})
     )
 
@@ -398,7 +398,7 @@ def test_users_get_list_jsonb_like_lookup_case_1(e_loop: AbstractEventLoop, user
     field = data["key"]
     lookup = f"{field}__jsonb_like"
     for value in data["value"]:
-        items: List[Type[UserEntity]] = e_loop.run_until_complete(
+        items: List[Type[UserAggregate]] = e_loop.run_until_complete(
             users_repository.get_list(filter_data={lookup: value})
         )
 
@@ -417,7 +417,7 @@ def test_users_get_list_jsonb_like_lookup_case_2(e_loop: AbstractEventLoop, user
     field = data["key"]
     lookup = f"meta__{field}__jsonb_like"
     for value in data["value"]:
-        items: List[Type[UserEntity]] = e_loop.run_until_complete(
+        items: List[Type[UserAggregate]] = e_loop.run_until_complete(
             users_repository.get_list(filter_data={lookup: value})
         )
 
@@ -444,7 +444,7 @@ def test_users_get_list_jsonb_not_like_lookup_case_1(e_loop: AbstractEventLoop, 
     field = data["key"]
     lookup = f"{field}__jsonb_not_like"
     for value in data["value"]:
-        items: List[Type[UserEntity]] = e_loop.run_until_complete(
+        items: List[Type[UserAggregate]] = e_loop.run_until_complete(
             users_repository.get_list(filter_data={lookup: value})
         )
 
@@ -464,7 +464,7 @@ def test_users_get_list_jsonb_not_like_lookup_case_2(e_loop: AbstractEventLoop, 
     field = data["key"]
     lookup = f"meta__{field}__jsonb_not_like"
     for value in data["value"]:
-        items: List[Type[UserEntity]] = e_loop.run_until_complete(
+        items: List[Type[UserAggregate]] = e_loop.run_until_complete(
             users_repository.get_list(filter_data={lookup: value})
         )
 

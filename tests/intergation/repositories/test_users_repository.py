@@ -7,8 +7,8 @@ from typing import Any, List, Type
 import pytest
 
 from src.app.core.utils.common import generate_str
-from src.app.domain.entities.users import UserEntity
-from src.app.domain.repositories.container import container as repo_container
+from src.app.domain.users.aggregates.users import UserAggregate
+from src.app.core.repositories.container import container as repo_container
 from tests.fixtures.constants import USERS
 
 
@@ -31,22 +31,22 @@ def test_users_repository_get_first_by_attr_name(e_loop: AbstractEventLoop, user
     attr_names = ["id", "uuid", "email"]
     for user_raw in USERS:
         for attr_name in attr_names:
-            user: Type[UserEntity] | None = e_loop.run_until_complete(
+            user: Type[UserAggregate] | None = e_loop.run_until_complete(
                 users_repository.get_first(filter_data={attr_name: user_raw.get(attr_name)})
             )
-            assert isinstance(user, UserEntity) is True
+            assert isinstance(user, UserAggregate) is True
             for key, value in user_raw.items():
                 assert getattr(user, key) == value
 
 
 def test_users_get_list_basic(e_loop: AbstractEventLoop, users: Any) -> None:
     users_repository = repo_container.users_repository
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(users_repository.get_list())
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(users_repository.get_list())
     assert isinstance(items, list) is True
     assert len(items) == len(USERS)
     raw_ids = [i["id"] for i in USERS]
     for user in items:
-        assert isinstance(user, UserEntity) is True
+        assert isinstance(user, UserAggregate) is True
         assert user.id in raw_ids
 
 
@@ -69,12 +69,12 @@ def test_users_repository_create(e_loop: AbstractEventLoop, users: Any) -> None:
         "email": "n" + generate_str(5) + "@gmail.com",
     }
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_user: UserEntity | None = e_loop.run_until_complete(
+    created_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.create(data=user_data_raw, is_return_require=True)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
 
-    assert isinstance(created_user, UserEntity) is True
+    assert isinstance(created_user, UserAggregate) is True
     for key, value in user_data_raw.items():
         assert getattr(created_user, key) == value
     assert count_after == count_before + 1
@@ -95,12 +95,12 @@ def test_users_repository_create_without_id_and_uuid(e_loop: AbstractEventLoop, 
         "email": "n" + generate_str(5) + "@gmail.com",
     }
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_user: UserEntity | None = e_loop.run_until_complete(
+    created_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.create(data=user_data_raw, is_return_require=True)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
 
-    assert isinstance(created_user, UserEntity) is True
+    assert isinstance(created_user, UserAggregate) is True
 
     assert getattr(created_user, "id") is not None
     assert getattr(created_user, "uuid") is not None
@@ -124,7 +124,7 @@ def test_users_repository_create_is_not_return(e_loop: AbstractEventLoop, users:
         "email": "n" + generate_str(5) + "@gmail.com",
     }
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_user: UserEntity | None = e_loop.run_until_complete(
+    created_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.create(data=user_data_raw, is_return_require=False)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -170,14 +170,14 @@ def test_users_repository_create_bulk(e_loop: AbstractEventLoop, users: Any) -> 
     items_raw = [user_data_raw_1, user_data_raw_2]
 
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_items: List[UserEntity] | None = e_loop.run_until_complete(
+    created_items: List[UserAggregate] | None = e_loop.run_until_complete(
         users_repository.create_bulk(items=items_raw, is_return_require=True)
     )
     created_items = created_items or []
     count_after = e_loop.run_until_complete(users_repository.count())
 
     for index, created_user in enumerate(created_items):
-        assert isinstance(created_user, UserEntity) is True
+        assert isinstance(created_user, UserAggregate) is True
         user_data_raw = items_raw[index]
         for key, value in user_data_raw.items():
             assert getattr(created_user, key) == value
@@ -217,14 +217,14 @@ def test_users_repository_create_bulk_without_id_uuid(e_loop: AbstractEventLoop,
     items_raw = [user_data_raw_1, user_data_raw_2]
 
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_items: List[UserEntity] | None = e_loop.run_until_complete(
+    created_items: List[UserAggregate] | None = e_loop.run_until_complete(
         users_repository.create_bulk(items=items_raw, is_return_require=True)
     )
     created_items = created_items or []
     count_after = e_loop.run_until_complete(users_repository.count())
 
     for index, created_user in enumerate(created_items):
-        assert isinstance(created_user, UserEntity) is True
+        assert isinstance(created_user, UserAggregate) is True
         user_data_raw = items_raw[index]
         assert getattr(created_user, "id") is not None
         assert getattr(created_user, "uuid") is not None
@@ -266,7 +266,7 @@ def test_users_repository_create_bulk_is_not_return(e_loop: AbstractEventLoop, u
     items_raw = [user_data_raw_1, user_data_raw_2]
 
     count_before = e_loop.run_until_complete(users_repository.count())
-    created_items: List[UserEntity] | None = e_loop.run_until_complete(
+    created_items: List[UserAggregate] | None = e_loop.run_until_complete(
         users_repository.create_bulk(items=items_raw, is_return_require=False)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -283,14 +283,14 @@ def test_users_repository_update_full(e_loop: AbstractEventLoop, users: Any) -> 
     user_data_raw["first_name"] = val_to_update
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_user: UserEntity | None = e_loop.run_until_complete(
+    updated_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.update(
             filter_data={"id": user_data_raw["id"]}, data=user_data_raw, is_return_require=True
         )
     )
     count_after = e_loop.run_until_complete(users_repository.count())
 
-    assert isinstance(updated_user, UserEntity) is True
+    assert isinstance(updated_user, UserAggregate) is True
     for key, value in user_data_raw.items():
         assert getattr(updated_user, key) == value
     assert count_after == count_before
@@ -307,12 +307,12 @@ def test_users_repository_update_partial(e_loop: AbstractEventLoop, users: Any) 
     }
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_user: UserEntity | None = e_loop.run_until_complete(
+    updated_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.update(filter_data={"id": user_data["id"]}, data=user_data_raw, is_return_require=True)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
 
-    assert isinstance(updated_user, UserEntity) is True
+    assert isinstance(updated_user, UserAggregate) is True
     for key, value in user_data.items():
         val_updated = getattr(updated_user, key)
         if key in user_data_raw:
@@ -332,7 +332,7 @@ def test_users_repository_update_without_return(e_loop: AbstractEventLoop, users
     }
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_user: UserEntity | None = e_loop.run_until_complete(
+    updated_user: UserAggregate | None = e_loop.run_until_complete(
         users_repository.update(filter_data={"id": user_data["id"]}, data=user_data_raw, is_return_require=False)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -353,7 +353,7 @@ def test_users_repository_bulk_update_full(e_loop: AbstractEventLoop, users: Any
     items_to_update = [item_1_to_update, item_2_to_update]
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_items: List[Type[UserEntity]] | None = e_loop.run_until_complete(
+    updated_items: List[Type[UserAggregate]] | None = e_loop.run_until_complete(
         users_repository.update_bulk(items=items_to_update, is_return_require=True)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -391,7 +391,7 @@ def test_users_repository_bulk_update_partial(e_loop: AbstractEventLoop, users: 
     items_to_update = [item_1_to_update, item_2_to_update]
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_items: List[Type[UserEntity]] | None = e_loop.run_until_complete(
+    updated_items: List[Type[UserAggregate]] | None = e_loop.run_until_complete(
         users_repository.update_bulk(items=items_to_update, is_return_require=True)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -426,7 +426,7 @@ def test_users_repository_bulk_without_return(e_loop: AbstractEventLoop, users: 
     items_to_update = [item_1_to_update, item_2_to_update]
 
     count_before = e_loop.run_until_complete(users_repository.count())  # noqa
-    updated_items: List[Type[UserEntity]] | None = e_loop.run_until_complete(
+    updated_items: List[Type[UserAggregate]] | None = e_loop.run_until_complete(
         users_repository.update_bulk(items=items_to_update, is_return_require=False)
     )
     count_after = e_loop.run_until_complete(users_repository.count())
@@ -434,7 +434,7 @@ def test_users_repository_bulk_without_return(e_loop: AbstractEventLoop, users: 
 
     for user_data_raw in items_to_update:
         id_ = user_data_raw["id"]
-        updated_user: UserEntity | None = e_loop.run_until_complete(
+        updated_user: UserAggregate | None = e_loop.run_until_complete(
             users_repository.get_first(filter_data={"id": id_})
         )
         for key, value in user_data_raw.items():
