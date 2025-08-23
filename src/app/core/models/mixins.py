@@ -22,10 +22,10 @@ class DTMixin(object):
 
     __table_args__ = {"extend_existing": True}
 
-    created_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=dt.datetime.now(dt.UTC))
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=dt.datetime.utcnow,
-        onupdate=dt.datetime.utcnow,
+        default=dt.datetime.now(dt.UTC),
+        onupdate=dt.datetime.now(dt.UTC),
     )

@@ -1,6 +1,6 @@
 from abc import ABC
 from copy import deepcopy
-from datetime import datetime
+import datetime as dt
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
@@ -296,10 +296,10 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 data["id"] = max_id + 1
 
             if hasattr(cls.model(), "created_at") and "created_at" not in list(data.keys()):  # noqa
-                data["created_at"] = datetime.utcnow()
+                data["created_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
             if hasattr(cls.model(), "updated_at") and "updated_at" not in list(data.keys()):
-                data["updated_at"] = datetime.utcnow()
+                data["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
             id_ = data["id"]
 
@@ -330,12 +330,12 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                     tmp_id = max_id + 1 + index
                     item["id"] = tmp_id
 
-                dt = datetime.utcnow()
+                dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
                 if hasattr(cls.model(), "created_at") and "created_at" not in list(item.keys()):
-                    item["created_at"] = dt
+                    item["created_at"] = dt_
 
                 if hasattr(cls.model(), "updated_at") and "updated_at" not in list(item.keys()):
-                    item["updated_at"] = dt
+                    item["updated_at"] = dt_
 
                 ids.append(item["id"])
 
@@ -360,7 +360,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         stmt = cls._apply_where(stmt, filter_data=filter_data)
 
         if hasattr(cls.model(), "updated_at") and "updated_at" not in list(data.keys()):
-            data["updated_at"] = datetime.utcnow()
+            data["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
         stmt = stmt.values(**data)
         stmt.execution_options(synchronize_session="fetch")
@@ -386,7 +386,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 if hasattr(cls.model(), "updated_at"):
                     for i in items:
                         if "updated_at" not in list(i.keys()):
-                            i["updated_at"] = datetime.utcnow()
+                            i["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
                 await session.execute(update(cls.model()), items)
                 await session.flush()
                 await session.commit()

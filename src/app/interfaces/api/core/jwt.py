@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+import datetime as dt
+from datetime import timedelta
 from typing import Optional, Dict
 
 from fastapi import HTTPException, status
@@ -33,7 +34,7 @@ class JWTHelper:
     @classmethod
     async def create_access_token(cls, data: dict) -> str:
         user_data = data.copy()
-        expire = datetime.utcnow() + timedelta(minutes=cls.ACCESS_TOKEN_EXPIRES_MINUTES)
+        expire = dt.datetime.now(dt.UTC) + timedelta(minutes=cls.ACCESS_TOKEN_EXPIRES_MINUTES)
         payload = {"user": user_data, "type": "access", "exp": expire}
         encoded_jwt = jwt.encode(payload, cls.SECRET, algorithm=cls.ALGORITHM)
         return encoded_jwt
@@ -41,7 +42,7 @@ class JWTHelper:
     @classmethod
     async def create_refresh_token(cls, data: dict) -> str:
         user_data = data.copy()
-        expire = datetime.utcnow() + timedelta(days=cls.REFRESH_TOKEN_EXPIRES_DAYS)
+        expire = dt.datetime.now(dt.UTC) + timedelta(days=cls.REFRESH_TOKEN_EXPIRES_DAYS)
         payload = {"user": user_data, "type": "refresh", "exp": expire}
         encoded_jwt = jwt.encode(payload, cls.SECRET, algorithm=cls.ALGORITHM)
         return encoded_jwt

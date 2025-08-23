@@ -2,7 +2,7 @@ import os
 import pathlib
 import secrets
 from enum import Enum
-from typing import Any, List, Union
+from typing import List, Union
 
 from environs import Env
 from pydantic.v1 import BaseSettings as PydanticSettings
@@ -69,7 +69,7 @@ class SettingsBase(PydanticSettings):
     # --------------------------------------------------------------------------
     MESSAGE_BROKER_URL: str | None = env.str("MESSAGE_BROKER_URL", None)
     DEFAULT_EXCHANGER: str = env.str("DEFAULT_EXCHANGER", "default_exchanger")
-    DEFAULT_QUEUE: Any = env.any("DEFAULT_QUEUE", 0)
+    DEFAULT_QUEUE: str = env.str("DEFAULT_QUEUE", "default_queue")
 
 
 class SettingsLocal(SettingsBase):
