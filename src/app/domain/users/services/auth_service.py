@@ -43,7 +43,7 @@ class AuthService(AbstractBaseService):
             if is_email_exists or not email:
                 raise HTTPException(status_code=422, detail="User already exists with email")
             data["email"] = email_validated
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=422, detail="Invalid value for email")
 
         password = data_.pop("password", None) or ""

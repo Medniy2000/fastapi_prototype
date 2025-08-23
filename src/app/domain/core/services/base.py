@@ -32,7 +32,9 @@ class AbstractEntityService(AbstractBaseService, Generic[OuterGenericType]):
         raise NotImplementedError
 
     @classmethod
-    async def create_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def create_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -42,7 +44,9 @@ class AbstractEntityService(AbstractBaseService, Generic[OuterGenericType]):
         raise NotImplementedError
 
     @classmethod
-    async def update_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def update_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -90,7 +94,9 @@ class BaseEntityService(AbstractEntityService, Generic[OuterGenericType]):
         return await cls.repository.create(data=data, is_return_require=is_return_require)
 
     @classmethod
-    async def create_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def create_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         return await cls.repository.create_bulk(items=items, is_return_require=is_return_require)
 
     @classmethod
@@ -100,7 +106,9 @@ class BaseEntityService(AbstractEntityService, Generic[OuterGenericType]):
         return await cls.repository.update(filter_data=filter_data, data=data, is_return_require=is_return_require)
 
     @classmethod
-    async def update_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def update_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         return await cls.repository.update_bulk(items=items, is_return_require=is_return_require)
 
     @classmethod

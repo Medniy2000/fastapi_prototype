@@ -6,6 +6,7 @@ from src.app.interfaces.api.core.jwt import JWTHelper
 auth_api_key_schema = HTTPBearer()
 jwt_helper = JWTHelper()
 
+
 async def validate_api_key(auth_api_key: str = Depends(auth_api_key_schema)) -> str:
     auth_api_key_ = str(auth_api_key.credentials).replace("Bearer ", "")  # type: ignore
     return auth_api_key_

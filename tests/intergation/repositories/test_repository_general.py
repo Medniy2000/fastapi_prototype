@@ -36,7 +36,7 @@ def test_users_get_list_limit_offset_case_2(e_loop: AbstractEventLoop, users: An
     limit = 10
     expected_count = 2
 
-    items: List[Type[UserEntity]] = e_loop.run_until_complete(  # noqa
+    items: List[Type[UserAggregate]] = e_loop.run_until_complete(  # noqa
         users_repository.get_list(filter_data={"limit": limit, "offset": offset})
     )
     assert isinstance(items, list) is True

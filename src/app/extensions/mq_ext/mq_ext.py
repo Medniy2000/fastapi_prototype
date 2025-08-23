@@ -10,12 +10,14 @@ class MQClientProxy:
     message_broker_type: str
     SUPPORTED_MESSAGE_BROKERS: dict = {"rabbitmq": RabbitQueueClientClient, "kafka": KafkaClient}
 
-    def __init__(self, message_broker_type: str, message_broker_url: str) -> None:
+    def __init__(self, message_broker_type: str | None, message_broker_url: str | None) -> None:
         client_class = self.SUPPORTED_MESSAGE_BROKERS.get(message_broker_type)
         if not client_class:
             raise ValueError(f"Unsupported message broker type: {message_broker_type}")
+        if not message_broker_url:
+            raise ValueError("Value for message_broker_url cannot be empty")
         self._client = client_class(message_broker_url)
-        self.message_broker_type = message_broker_type
+        self.message_broker_type = message_broker_type  # type: ignore
 
     async def produce_messages(
         self,

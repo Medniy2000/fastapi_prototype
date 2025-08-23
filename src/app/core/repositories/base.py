@@ -19,7 +19,7 @@ class AbstractRepository(ABC):
 
 class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
-    OUT_ENTITY: Optional[Type[BaseAggregate]] = None
+    OUT_ENTITY: Any = None
 
     @classmethod
     async def count(cls, filter_data: dict) -> int:
@@ -42,7 +42,9 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         raise NotImplementedError
 
     @classmethod
-    async def create_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def create_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -52,7 +54,9 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         raise NotImplementedError
 
     @classmethod
-    async def update_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def update_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -71,7 +75,7 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
 
 class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
-    OUT_ENTITY: Optional[Type[BaseAggregate]] = None
+    OUT_ENTITY: Any = None
 
     @staticmethod
     def __not_like_all(stmt: Any, k: Any, v: Any) -> Select:
@@ -309,7 +313,9 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         return None
 
     @classmethod
-    async def create_bulk(cls, items: List[dict], is_return_require: bool = False) -> List[OuterGenericType] | None:
+    async def create_bulk(
+        cls, items: List[dict], is_return_require: bool = False
+    ) -> List[OuterGenericType] | None:
         if not items:
             return []
 

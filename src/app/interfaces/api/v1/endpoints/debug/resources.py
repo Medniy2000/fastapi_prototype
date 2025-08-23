@@ -34,5 +34,5 @@ async def send_message(
     request_body = await request.json()
     message_ = message.dict()  # noqa
     await mq_client.produce_messages(
-        messages=[request_body], queue_name=settings.DEFAULT_QUEUE, exchanger_name=settings.DEFAULT_EXCHANGER
+        messages=[request_body], queue_name=settings.DEFAULT_QUEUE, exchanger_name=settings.DEFAULT_EXCHANGER or ""
     )

@@ -10,7 +10,6 @@ from src.app.config.settings import settings
 from src.app.core.utils.common import generate_str
 
 
-
 class JWTHelper:
     SECRET = settings.SECRET_KEY
     ACCESS_TOKEN_EXPIRES_MINUTES = settings.ACCESS_TOKEN_EXPIRES_MINUTES
