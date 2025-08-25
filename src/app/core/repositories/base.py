@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, Ty
 from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
 
 from src.app.core.utils.common import generate_str
-from src.app.domain.core.aggregates.base import BaseAggregate
+from src.app.domain.common.aggregates.base import BaseAggregate
 from src.app.extensions.psql_ext.psql_ext import Base, get_session
 
 BaseModel = TypeVar("BaseModel", bound=Base)

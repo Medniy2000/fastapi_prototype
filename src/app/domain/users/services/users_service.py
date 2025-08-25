@@ -1,5 +1,5 @@
 from src.app.core.repositories.container import container as repo_container
-from src.app.domain.core.services.base import BaseEntityService
+from src.app.domain.common.services.base import BaseEntityService
 
 
 class UserService(BaseEntityService):

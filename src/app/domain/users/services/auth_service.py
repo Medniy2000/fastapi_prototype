@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from passlib.context import CryptContext
 from pydantic import validate_email
 
-from src.app.domain.core.services.base import AbstractBaseService
+from src.app.domain.common.services.base import AbstractBaseService
 from src.app.domain.users.container import container as services_container
 
 
