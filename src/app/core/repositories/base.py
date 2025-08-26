@@ -201,15 +201,6 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         return cls.OUT_ENTITY
 
     @classmethod
-    async def __get_max_id(cls) -> int:
-        tmp_table_name = cls.model().__tablename__  # type: ignore
-        max_id_stmp = f"SELECT MAX(t.id) FROM {tmp_table_name} t;"
-        async with get_session(expire_on_commit=True) as session:
-            max_id_q = await session.execute(statement=text(max_id_stmp))
-            max_id = max_id_q.scalars().first() or 0
-            return max_id
-
-    @classmethod
     async def count(cls, filter_data: Optional[dict] = None) -> int:
         if not filter_data:
             filter_data = {}
@@ -289,27 +280,40 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
     @classmethod
     async def create(cls, data: dict, is_return_require: bool = False) -> OuterGenericType | None:
+        data_copy = data.copy()
+        
+        # Handle explicit ID if provided, otherwise let database auto-increment
+        explicit_id_provided = "id" in data_copy and data_copy["id"] is not None
+        
+        if hasattr(cls.model(), "created_at") and "created_at" not in data_copy:
+            data_copy["created_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+
+        if hasattr(cls.model(), "updated_at") and "updated_at" not in data_copy:
+            data_copy["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
         async with get_session(expire_on_commit=True) as session:
-            if "id" not in list(data.keys()):
-                max_id = await cls.__get_max_id()
-                data["id"] = max_id + 1
-
-            if hasattr(cls.model(), "created_at") and "created_at" not in list(data.keys()):  # noqa
-                data["created_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-
-            if hasattr(cls.model(), "updated_at") and "updated_at" not in list(data.keys()):
-                data["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-
-            id_ = data["id"]
-
-            new_obj = cls.model()(**data)  # type: ignore
-            session.add(new_obj)
-            await session.commit()
-
-        if is_return_require:
-            item = await cls.get_first(filter_data={"id": id_})
-            return item
+            if is_return_require:
+                # Use RETURNING to get specific columns instead of the whole model
+                stmt = insert(cls.model()).values(data_copy).returning(*cls.model().__table__.columns.values())
+                result = await session.execute(stmt)
+                await session.commit()
+                raw = result.fetchone()
+                if raw:
+                    out_entity_ = cls.out_entity()
+                    # Convert Row to dict using column names
+                    entity_data = dict(zip([col.name for col in cls.model().__table__.columns.values()], raw))
+                    return out_entity_(**entity_data)
+            else:
+                if explicit_id_provided:
+                    # For explicit ID, use insert statement to handle potential conflicts better
+                    stmt = insert(cls.model()).values(data_copy)
+                    await session.execute(stmt)
+                else:
+                    # For auto-increment ID, use ORM method
+                    new_obj = cls.model()(**data_copy)
+                    session.add(new_obj)
+                await session.commit()
+        
         return None
 
     @classmethod
@@ -319,35 +323,36 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         if not items:
             return []
 
-        max_id = await cls.__get_max_id()
+        items_copy = deepcopy(items)
+        dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+        
+        # Add timestamps to all items
+        for item in items_copy:
+            if hasattr(cls.model(), "created_at") and "created_at" not in item:
+                item["created_at"] = dt_
+            if hasattr(cls.model(), "updated_at") and "updated_at" not in item:
+                item["updated_at"] = dt_
 
-        ids = []
-        items_ = deepcopy(items)
         async with get_session(expire_on_commit=True) as session:
-
-            for index, item in enumerate(items_):
-                if item.get("id") is None or item.get("id", -1) < 0:
-                    tmp_id = max_id + 1 + index
-                    item["id"] = tmp_id
-
-                dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-                if hasattr(cls.model(), "created_at") and "created_at" not in list(item.keys()):
-                    item["created_at"] = dt_
-
-                if hasattr(cls.model(), "updated_at") and "updated_at" not in list(item.keys()):
-                    item["updated_at"] = dt_
-
-                ids.append(item["id"])
-
-            stmt = insert(cls.model()).values(items_)
-            await session.execute(stmt)
-            await session.flush()
-            await session.commit()
-
-        if is_return_require:
-            items_to_return = await cls.get_list(filter_data={"id__in": ids}) or []
-            sorted(items_to_return, key=lambda i: ids.index(i.id))  # type: ignore
-            return items_to_return
+            if is_return_require:
+                # Use RETURNING to get created records efficiently
+                stmt = insert(cls.model()).values(items_copy).returning(*cls.model().__table__.columns.values())
+                result = await session.execute(stmt)
+                await session.commit()
+                
+                raw_items = result.fetchall()
+                out_entity_ = cls.out_entity()
+                created_items = []
+                column_names = [col.name for col in cls.model().__table__.columns.values()]
+                for raw in raw_items:
+                    # Convert Row to dict using column names
+                    entity_data = dict(zip(column_names, raw))
+                    created_items.append(out_entity_(**entity_data))
+                return created_items
+            else:
+                stmt = insert(cls.model()).values(items_copy)
+                await session.execute(stmt)
+                await session.commit()
 
         return None
 
@@ -379,23 +384,46 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         items: List[dict],
         is_return_require: bool = False,
     ) -> List[OuterGenericType] | None:
-        bind_param: str = "id"
-        expire_on_commit = not is_return_require
-        if items:
-            async with get_session(expire_on_commit=expire_on_commit) as session:
-                if hasattr(cls.model(), "updated_at"):
-                    for i in items:
-                        if "updated_at" not in list(i.keys()):
-                            i["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-                await session.execute(update(cls.model()), items)
-                await session.flush()
-                await session.commit()
+        if not items:
+            return None
+            
+        items_copy = deepcopy(items)
+        
+        # Add updated_at timestamp if the model supports it
+        if hasattr(cls.model(), "updated_at"):
+            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+            for item in items_copy:
+                if "updated_at" not in item:
+                    item["updated_at"] = dt_
+
+        async with get_session(expire_on_commit=True) as session:
             if is_return_require:
-                params = [i.get(bind_param) for i in items]
-                filter_data = {f"{bind_param}__in": params}
-                items_ = await cls.get_list(filter_data=filter_data)
-                sorted(items_, key=lambda el: params.index(getattr(el, bind_param, None)))  # type: ignore
-                return items_
+                # For PostgreSQL, we can use RETURNING with bulk updates
+                # For now, we'll do individual updates with RETURNING for better compatibility
+                updated_items = []
+                out_entity_ = cls.out_entity()
+                
+                for item_data in items_copy:
+                    if "id" not in item_data:
+                        continue
+                        
+                    item_id = item_data.pop("id")
+                    stmt = update(cls.model()).where(cls.model().id == item_id).values(**item_data).returning(*cls.model().__table__.columns.values())
+                    result = await session.execute(stmt)
+                    raw = result.fetchone()
+                    if raw:
+                        # Convert Row to dict using column names
+                        column_names = [col.name for col in cls.model().__table__.columns.values()]
+                        entity_data = dict(zip(column_names, raw))
+                        updated_items.append(out_entity_(**entity_data))
+                
+                await session.commit()
+                return updated_items
+            else:
+                # Bulk update without RETURNING for better performance when result not needed
+                await session.execute(update(cls.model()), items_copy)
+                await session.commit()
+                
         return None
 
     @classmethod
