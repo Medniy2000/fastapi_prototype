@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends
 
 from src.app.interfaces.api.core.dependencies import validate_auth_data
@@ -13,5 +15,5 @@ async def get_users(
 ) -> dict:
     user = await services_container.users_service.get_first(filter_data={"uuid": auth_data["uuid"]})
     if user:
-        return user.dict()
+        return asdict(user)
     return {}

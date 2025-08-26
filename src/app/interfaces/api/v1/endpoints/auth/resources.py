@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
@@ -15,9 +16,9 @@ router = APIRouter(prefix="/auth")
 @router.post(path="/sign-up/", response_model=SignupResp, name="sign-up")
 async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
 
-    user = await services_container.auth_service.create_auth_user(data=data.dict())
+    user = await services_container.auth_service.create_auth_user(data=data.model_dump())
 
-    return user.dict()
+    return asdict(user)
 
 
 @router.post(path="/tokens/", response_model=TokenResp, name="tokens pair")
