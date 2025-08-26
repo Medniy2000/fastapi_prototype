@@ -22,7 +22,7 @@ def users(e_loop: AbstractEventLoop) -> None:  # type: ignore
                 stmt = insert(user_model).values(**user)
                 await session.execute(stmt)
                 await session.commit()
-            
+
             await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));"))
             await session.commit()
 
