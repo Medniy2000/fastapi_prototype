@@ -63,8 +63,8 @@ class AbstractEntityService(AbstractBaseService, Generic[OuterGenericType]):
         raise NotImplementedError
 
 
-class BaseEntityService(AbstractEntityService, Generic[OuterGenericType]):
-    repository: Type[AbstractBaseRepository]
+class BaseEntityService(AbstractEntityService[OuterGenericType], Generic[OuterGenericType]):
+    repository: Type[AbstractBaseRepository[OuterGenericType]]
 
     @classmethod
     async def count(cls, filter_data: dict) -> int:
@@ -85,7 +85,7 @@ class BaseEntityService(AbstractEntityService, Generic[OuterGenericType]):
     ) -> List[OuterGenericType]:
         filter_data_ = filter_data.copy()
         filter_data_["offset"] = offset
-        if limit:
+        if limit is not None:
             filter_data_["limit"] = limit
         return await cls.repository.get_list(filter_data=filter_data_, order_data=order_data)
 
