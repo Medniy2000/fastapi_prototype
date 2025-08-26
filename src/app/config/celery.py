@@ -26,11 +26,11 @@ task_queues = (
 )
 
 
-imports = ("src.app.common.tasks.example_task",)
+imports = ("src.app.core.tasks.example_task",)
 
 TASKS: dict = {
     "example_task": {
-        "task": "src.app.common.tasks.example_task.say_meow",  # Every 2 minutes
+        "task": "src.app.core.tasks.example_task.say_meow",  # Every 2 minutes
         "schedule": crontab(*("*/2", "*", "*", "*", "*")),
         "options": {"queue": default_queue},
     },
