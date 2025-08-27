@@ -2,7 +2,7 @@ from asyncio import AbstractEventLoop
 
 import pytest
 from loguru import logger
-from sqlalchemy import delete, insert
+from sqlalchemy import delete, insert, text
 
 from src.app.core.models.container import container as models_container
 from src.app.extensions.psql_ext.psql_ext import get_session
@@ -23,6 +23,9 @@ def users(e_loop: AbstractEventLoop) -> None:  # type: ignore
                 await session.execute(stmt)
                 await session.commit()
 
+            await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));"))
+            await session.commit()
+
     e_loop.run_until_complete(startup())
 
     yield
@@ -36,6 +39,8 @@ def users(e_loop: AbstractEventLoop) -> None:  # type: ignore
                 stmt = delete(model)
                 await session.execute(stmt)
                 await session.commit()
+            await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));"))
+            await session.commit()
 
     e_loop.run_until_complete(tear_down())
 

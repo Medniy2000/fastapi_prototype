@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime as dt
 
 from sqlalchemy import Boolean, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -15,8 +15,8 @@ class User(Base, PKMixin):
     updated_at = Column(
         DateTime,
         nullable=True,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=dt.datetime.now(dt.UTC),
+        onupdate=dt.datetime.now(dt.UTC),
     )
     birthday = Column(
         DateTime,

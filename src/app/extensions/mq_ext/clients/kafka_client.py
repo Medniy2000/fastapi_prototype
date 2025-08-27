@@ -1,9 +1,8 @@
 import json
-from datetime import datetime
+import datetime as dt
 from typing import Callable, List
 from loguru import logger
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord, TopicPartition
-import pytz
 
 
 class KafkaClient:
@@ -28,7 +27,7 @@ class KafkaClient:
                 await producer.send_and_wait(
                     topic=topic,
                     partition=partition,
-                    timestamp_ms=datetime.now(pytz.timezone("UTC")).timestamp(),
+                    timestamp_ms=dt.datetime.now(dt.UTC).timestamp(),
                     value=message_.encode(),
                 )
         finally:
