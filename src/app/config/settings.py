@@ -67,9 +67,9 @@ class SettingsBase(PydanticSettings):
 
     # Message Broker Settings
     # --------------------------------------------------------------------------
-    MESSAGE_BROKER_URL: str = env.str("MESSAGE_BROKER_URL", None)
-    DEFAULT_EXCHANGER: str = env.str("DEFAULT_EXCHANGER", None)
-    DEFAULT_QUEUE: str = env.str("DEFAULT_QUEUE", 0)
+    MESSAGE_BROKER_URL: str | None = env.str("MESSAGE_BROKER_URL", None)
+    DEFAULT_EXCHANGER: str = env.str("DEFAULT_EXCHANGER", "default_exchanger")
+    DEFAULT_QUEUE: str = env.str("DEFAULT_QUEUE", "default_queue")
 
 
 class SettingsLocal(SettingsBase):

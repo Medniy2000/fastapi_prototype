@@ -65,6 +65,7 @@ To run app using Docker::
     $ cd <path_to>/{your_project_name}
 
     # build, run celery
+    $ docker run -d --name my_local_redis -p 6379:6379 redis:latest
     $ docker build -t celery_img --no-cache -f .launch/celery/Dockerfile .
     $ docker run -d --name my_local_celery --shm-size="512m" --cpus=2 --env-file ./.env -e CELERY_ARGS="worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h" celery_img
     $ docker run -d --name my_local_flower -e broker_url=redis://172.17.0.1:6379/11 -e CELERY_BROKER_URL=redis://172.17.0.1:6379/11 -e CELERY_BROKER_API=redis://172.17.0.1:6379/12  -p 5555:5555 mher/flower

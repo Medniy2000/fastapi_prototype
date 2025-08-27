@@ -15,7 +15,7 @@ HANDLERS_MAP: dict = {"say_meow": {"handler": say_meow, "celery_queue": default_
 async def queue_processing_aggregator(data: dict, handlers_by_event: Dict[str, Dict[str, Any]]) -> None:
     """Calls required trigger handler depend queue message"""
 
-    event = data.get("event", None)
+    event = data.get("event") or ""
     event_data = data.get("data", None)
 
     handler_info = handlers_by_event.get(event, {}) or {}
