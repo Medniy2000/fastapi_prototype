@@ -3,7 +3,7 @@ import datetime as dt
 from sqlalchemy import Boolean, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from src.app.infrastructure.models.mixins import PKMixin
+from src.app.infrastructure.persistence.models.mixins import PKMixin
 from src.app.extensions.psql_ext.psql_ext import Base
 
 

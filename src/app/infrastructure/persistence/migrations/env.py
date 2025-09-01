@@ -11,7 +11,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from src.app.config.settings import settings
-
+from src.app.infrastructure.persistence.models.container import container as model_container
 
 config = context.config
 
@@ -19,14 +19,12 @@ config = context.config
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)  # type: ignore
 
-from src.app.infrastructure.models.users import *
-
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 
-target_metadata = Base.metadata
+target_metadata = model_container.base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

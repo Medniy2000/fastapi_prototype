@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
-from src.app.infrastructure.models.users import User
+from src.app.infrastructure.persistence.models.container import container as models_container
 from src.app.infrastructure.repositories.base import BaseSQLAsyncDrivenBaseRepository
 
 
@@ -30,5 +30,5 @@ class UserAggregate:
 
 
 class UsersRepository(BaseSQLAsyncDrivenBaseRepository):
-    MODEL = User
+    MODEL = models_container.user
     OUT_ENTITY = UserAggregate

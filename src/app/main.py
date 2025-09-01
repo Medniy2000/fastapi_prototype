@@ -5,7 +5,7 @@ from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
 
 from src.app.interfaces.api.routers import api_router
-from src.app.common.log_utils import logging_setup
+from src.app.infrastructure.common.log_utils import logging_setup
 from src.app.config.settings import settings
 
 

@@ -1,6 +1,6 @@
 from typing import List, NamedTuple, Type
 
-from src.app.infrastructure.models.users import User
+from src.app.infrastructure.persistence.models.users import User
 from src.app.extensions.psql_ext.psql_ext import Base
 
 
