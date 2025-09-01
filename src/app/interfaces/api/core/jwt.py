@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.app.config.settings import settings
 
-from src.app.core.utils.common import generate_str
+from src.app.infrastructure.utils.common import generate_str
 
 
 class JWTHelper:

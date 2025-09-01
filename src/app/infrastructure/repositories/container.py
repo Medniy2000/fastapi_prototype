@@ -1,6 +1,6 @@
 from typing import NamedTuple, Type
 
-from src.app.core.repositories.users_repository import UsersRepository
+from src.app.infrastructure.repositories.users_repository import UsersRepository
 
 
 class RepositoriesContainer(NamedTuple):

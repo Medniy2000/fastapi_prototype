@@ -19,7 +19,7 @@ config = context.config
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)  # type: ignore
 
-from src.app.core.models.users import *
+from src.app.infrastructure.models.users import *
 
 # add your model's MetaData object here
 # for 'autogenerate' support

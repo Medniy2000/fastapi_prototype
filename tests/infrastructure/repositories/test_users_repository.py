@@ -6,9 +6,9 @@ from typing import Any, List, Type
 
 import pytest
 
-from src.app.core.utils.common import generate_str
-from src.app.core.repositories.users_repository import UserAggregate
-from src.app.core.repositories.container import container as repo_container
+from src.app.infrastructure.utils.common import generate_str
+from src.app.infrastructure.repositories.users_repository import UserAggregate
+from src.app.infrastructure.repositories.container import container as repo_container
 from tests.fixtures.constants import USERS
 
 
