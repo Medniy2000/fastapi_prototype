@@ -75,7 +75,27 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
 
 class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
-    OUT_ENTITY: Any = None
+    OUT_ENTITY: Any = None  # dataclass with required schema
+
+    __ATR_SEPARATOR: str = "__"
+    LOOKUP_MAP = {
+        "gt": lambda stmt, key1, _, v: stmt.where(key1 > v),
+        "gte": lambda stmt, key1, _, v: stmt.where(key1 >= v),
+        "lt": lambda stmt, key1, _, v: stmt.where(key1 < v),
+        "lte": lambda stmt, key1, _, v: stmt.where(key1 <= v),
+        "e": lambda stmt, key1, _, v: stmt.where(key1 == v),
+        "ne": lambda stmt, key1, _, v: stmt.where(key1 != v),
+        "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
+        "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
+        "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
+        "not_like_all": lambda stmt, key1, _, v: BaseSQLAsyncDrivenBaseRepository.__not_like_all(stmt, key1, v),
+        "jsonb_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_like(
+            stmt, key1, key_2, v
+        ),
+        "jsonb_not_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_not_like(
+            stmt, key1, key_2, v
+        ),
+    }
 
     @staticmethod
     def __not_like_all(stmt: Any, k: Any, v: Any) -> Select:
@@ -104,26 +124,6 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                     **{key_: str(v)}
                 )
             )
-
-    __ATR_SEPARATOR: str = "__"
-    LOOKUP_MAP = {
-        "gt": lambda stmt, key1, _, v: stmt.where(key1 > v),
-        "gte": lambda stmt, key1, _, v: stmt.where(key1 >= v),
-        "lt": lambda stmt, key1, _, v: stmt.where(key1 < v),
-        "lte": lambda stmt, key1, _, v: stmt.where(key1 <= v),
-        "e": lambda stmt, key1, _, v: stmt.where(key1 == v),
-        "ne": lambda stmt, key1, _, v: stmt.where(key1 != v),
-        "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
-        "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
-        "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
-        "not_like_all": lambda stmt, key1, _, v: BaseSQLAsyncDrivenBaseRepository.__not_like_all(stmt, key1, v),
-        "jsonb_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_like(
-            stmt, key1, key_2, v
-        ),
-        "jsonb_not_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_not_like(
-            stmt, key1, key_2, v
-        ),
-    }
 
     @classmethod
     def _parse_filter_key(cls, key: str) -> Tuple[str, str, str]:  # type: ignore

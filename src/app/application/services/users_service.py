@@ -1,6 +1,6 @@
 from src.app.core.repositories.container import container as repo_container
-from src.app.domain.common.services.base import BaseEntityService
+from src.app.application.common.services.base import BaseApplicationService
 
 
-class UserService(BaseEntityService):
+class UserService(BaseApplicationService):
     repository = repo_container.users_repository
