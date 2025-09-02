@@ -10,7 +10,6 @@ from src.app.infrastructure.utils.common import generate_str
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
 
 
-
 class AbstractRepository(ABC):
     pass
 
@@ -22,7 +21,6 @@ class BaseOutputEntity(ABC):
 
 BaseModel = TypeVar("BaseModel", bound=Base)
 OuterGenericType = TypeVar("OuterGenericType", bound=BaseOutputEntity)
-
 
 
 class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
@@ -329,7 +327,6 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             return []
 
         items_copy = deepcopy(items)
-        
 
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
@@ -363,7 +360,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
     ) -> OuterGenericType | None:
         data_copy = deepcopy(data)
-        
+
         stmt = update(cls.model())
         stmt = cls._apply_where(stmt, filter_data=filter_data)
 
@@ -415,7 +412,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             return None
 
         items_copy = deepcopy(items)
-        
+
         cls._set_timestamps_on_update(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
@@ -425,7 +422,6 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 await cls._bulk_update_without_returning(session, items_copy)
                 return None
 
-   
     @classmethod
     def _set_timestamps_on_update(cls, items: List[dict]) -> None:
         """Set updated_at on update"""
@@ -434,7 +430,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             for item in items:
                 if "updated_at" not in item:
                     item["updated_at"] = dt_
-    
+
     @classmethod
     def _set_timestamps_on_create(cls, items: List[dict]) -> None:
         """Set created_at, updated_at on create"""
