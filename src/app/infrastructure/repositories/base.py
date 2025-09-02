@@ -1,20 +1,28 @@
 from abc import ABC
 from copy import deepcopy
 import datetime as dt
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
 
 from src.app.infrastructure.utils.common import generate_str
-from src.app.domain.common.aggregates.base import BaseAggregate
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
 
-BaseModel = TypeVar("BaseModel", bound=Base)
-OuterGenericType = TypeVar("OuterGenericType", bound=BaseAggregate)
 
 
 class AbstractRepository(ABC):
     pass
+
+
+@dataclass
+class BaseOutputEntity(ABC):
+    pass
+
+
+BaseModel = TypeVar("BaseModel", bound=Base)
+OuterGenericType = TypeVar("OuterGenericType", bound=BaseOutputEntity)
+
 
 
 class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
@@ -285,11 +293,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         # Handle explicit ID if provided, otherwise let database auto-increment
         explicit_id_provided = "id" in data_copy and data_copy["id"] is not None
 
-        if hasattr(cls.model(), "created_at") and "created_at" not in data_copy:
-            data_copy["created_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-
-        if hasattr(cls.model(), "updated_at") and "updated_at" not in data_copy:
-            data_copy["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+        cls._set_timestamps_on_create(items=[data_copy])
 
         async with get_session(expire_on_commit=True) as session:
             if is_return_require:
@@ -325,14 +329,10 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             return []
 
         items_copy = deepcopy(items)
-        dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+        
 
         # Add timestamps to all items
-        for item in items_copy:
-            if hasattr(cls.model(), "created_at") and "created_at" not in item:
-                item["created_at"] = dt_
-            if hasattr(cls.model(), "updated_at") and "updated_at" not in item:
-                item["updated_at"] = dt_
+        cls._set_timestamps_on_create(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
             model_class = cls.model()  # type: ignore
@@ -362,14 +362,14 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
     async def update(
         cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
     ) -> OuterGenericType | None:
-
+        data_copy = deepcopy(data)
+        
         stmt = update(cls.model())
         stmt = cls._apply_where(stmt, filter_data=filter_data)
 
-        if hasattr(cls.model(), "updated_at") and "updated_at" not in list(data.keys()):
-            data["updated_at"] = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+        cls._set_timestamps_on_update(items=[data_copy])
 
-        stmt = stmt.values(**data)
+        stmt = stmt.values(**data_copy)
         stmt.execution_options(synchronize_session="fetch")
 
         async with get_session(expire_on_commit=True) as session:
@@ -415,7 +415,8 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             return None
 
         items_copy = deepcopy(items)
-        cls._add_updated_timestamps(items_copy)
+        
+        cls._set_timestamps_on_update(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
             if is_return_require:
@@ -424,14 +425,26 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 await cls._bulk_update_without_returning(session, items_copy)
                 return None
 
+   
     @classmethod
-    def _add_updated_timestamps(cls, items: List[dict]) -> None:
-        """Add updated_at timestamp to items if the model supports it"""
+    def _set_timestamps_on_update(cls, items: List[dict]) -> None:
+        """Set updated_at on update"""
         if hasattr(cls.model(), "updated_at"):
             dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
             for item in items:
                 if "updated_at" not in item:
                     item["updated_at"] = dt_
+    
+    @classmethod
+    def _set_timestamps_on_create(cls, items: List[dict]) -> None:
+        """Set created_at, updated_at on create"""
+        if hasattr(cls.model(), "updated_at") or hasattr(cls.model(), "created_at"):
+            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+            for item in items:
+                if hasattr(cls.model(), "updated_at") and "updated_at" not in item:
+                    item["updated_at"] = dt_
+                if hasattr(cls.model(), "created_at") and "created_at" not in item:
+                    item["created_at"] = dt_
 
     @classmethod
     async def _bulk_update_with_returning(cls, session: Any, items: List[dict]) -> List[OuterGenericType]:
