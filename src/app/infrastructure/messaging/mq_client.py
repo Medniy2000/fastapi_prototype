@@ -2,8 +2,8 @@ from enum import Enum
 from typing import Any, Callable, List, Protocol
 
 from src.app.config.settings import settings
-from src.app.extensions.mq_ext.clients.kafka_client import KafkaClient
-from src.app.extensions.mq_ext.clients.rabbitmq_client import RabbitQueueClientClient
+from src.app.infrastructure.messaging.clients.kafka_client import KafkaClient
+from src.app.infrastructure.messaging.clients.rabbitmq_client import RabbitQueueClientClient
 
 
 class MessageBrokerProtocol(Protocol):

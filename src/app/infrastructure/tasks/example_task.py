@@ -1,7 +1,7 @@
 import asyncio
 import random
 
-from src.app.extensions.celery_ext.celery_app import celery_app
+from src.app.interfaces.cli.celery_app import celery_app
 
 
 @celery_app.task()

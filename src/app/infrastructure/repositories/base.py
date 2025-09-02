@@ -7,7 +7,7 @@ from sqlalchemy import delete, exists, func, insert, inspect, select, Select, St
 
 from src.app.infrastructure.utils.common import generate_str
 from src.app.domain.common.aggregates.base import BaseAggregate
-from src.app.extensions.psql_ext.psql_ext import Base, get_session
+from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
 
 BaseModel = TypeVar("BaseModel", bound=Base)
 OuterGenericType = TypeVar("OuterGenericType", bound=BaseAggregate)

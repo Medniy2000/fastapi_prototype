@@ -7,7 +7,7 @@ from loguru import logger
 from src.app.config.celery import default_queue
 from src.app.config.settings import settings
 from src.app.infrastructure.tasks.example_task import say_meow
-from src.app.extensions.mq_ext.mq_ext import mq_client
+from src.app.infrastructure.messaging.mq_client import mq_client
 
 HANDLERS_MAP: dict = {"say_meow": {"handler": say_meow, "celery_queue": default_queue}}
 

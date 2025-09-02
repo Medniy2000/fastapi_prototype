@@ -1,7 +1,7 @@
 from typing import List, NamedTuple, Type
 
 from src.app.infrastructure.persistence.models.users import User
-from src.app.extensions.psql_ext.psql_ext import Base
+from src.app.infrastructure.extensions.psql_ext.psql_ext import Base
 
 
 class ModelsContainer(NamedTuple):

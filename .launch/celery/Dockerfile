@@ -16,4 +16,4 @@ CMD alembic upgrade head
 
 ENV PYTHONPATH=/app
 
-CMD alembic upgrade head && poetry run celery -A src.app.extensions.celery_ext.celery_app $CELERY_ARGS
+CMD alembic upgrade head && poetry run celery -A src.app.interfaces.cli.celery_app $CELERY_ARGS
