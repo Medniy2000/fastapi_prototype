@@ -1,7 +1,7 @@
 from abc import ABC
 from copy import deepcopy
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
@@ -36,38 +36,52 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         raise NotImplementedError
 
     @classmethod
-    async def get_first(cls, filter_data: dict) -> OuterGenericType | None:
+    async def get_first(
+        cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
+    ) -> OuterGenericType | None:
         raise NotImplementedError
 
     @classmethod
-    async def get_list(cls, filter_data: dict, order_data: Tuple[str] = ("id",)) -> List[OuterGenericType]:
+    async def get_list(
+        cls, filter_data: dict, order_data: Tuple[str] = ("id",), out_dataclass: Optional[OuterGenericType] = None
+    ) -> List[OuterGenericType]:
         raise NotImplementedError
 
     @classmethod
-    async def create(cls, data: dict, is_return_require: bool = False) -> OuterGenericType | None:
+    async def create(
+        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
+    ) -> OuterGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
     async def update(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
     ) -> OuterGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
         raise NotImplementedError
 
     @classmethod
     async def update_or_create(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
     ) -> OuterGenericType | None:
         raise NotImplementedError
 
@@ -201,10 +215,32 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         return cls.MODEL
 
     @classmethod
-    def out_entity(cls) -> Callable:
-        if not cls.OUT_ENTITY:
-            raise AttributeError
-        return cls.OUT_ENTITY
+    def __make_out_dataclass(cls) -> Tuple[Callable, List[str]]:
+        model = cls.model()  # type: ignore
+        columns = inspect(model).c
+        field_names = [column.name for column in columns]
+        field_types = {column.name: column.type.python_type for column in columns}
+
+        # Dynamically create a dataclass using `make_dataclass`
+        dataclass_name = model.__name__ + "Entity"
+
+        # Generate the dataclass with the field names and types
+        dataclass_fields = [(name, field_types[name]) for name in field_names]
+        dynamic_dataclass = make_dataclass(dataclass_name, dataclass_fields)
+
+        return dynamic_dataclass, field_names
+
+    @classmethod
+    def out_dataclass_with_columns(
+        cls, out_dataclass: Optional[OuterGenericType] = None
+    ) -> Tuple[Callable, List[str]]:
+        if not out_dataclass:
+            out_dataclass_, columns = cls.__make_out_dataclass()
+        else:
+            out_dataclass_ = out_dataclass  # type: ignore
+            columns = [f.name for f in fields(out_dataclass_)]  # type: ignore
+
+        return out_dataclass_, columns
 
     @classmethod
     async def count(cls, filter_data: Optional[dict] = None) -> int:
@@ -238,7 +274,9 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             return is_exists
 
     @classmethod
-    async def get_first(cls, filter_data: dict) -> OuterGenericType | None:
+    async def get_first(
+        cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
+    ) -> OuterGenericType | None:
         filter_data_ = deepcopy(filter_data)
         filter_data_.pop("limit", "")
         filter_data_.pop("offset", "")
@@ -251,14 +289,17 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
         raw = result.scalars().first()
         if raw:
-            out_entity_ = cls.out_entity()
+            out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
             entity_data_tmp = {c.key: getattr(raw, c.key) for c in inspect(raw).mapper.column_attrs}
             return out_entity_(**entity_data_tmp)
         return None
 
     @classmethod
     async def get_list(
-        cls, filter_data: Optional[dict] = None, order_data: Optional[Tuple[str]] = ("id",)
+        cls,
+        filter_data: Optional[dict] = None,
+        order_data: Optional[Tuple[str]] = ("id",),
+        out_dataclass: Optional[OuterGenericType] = None,
     ) -> List[OuterGenericType]:
         if not filter_data:
             filter_data = {}
@@ -276,16 +317,18 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             result = await session.execute(stmt)
 
         raw_items = result.scalars().all()
-        out_entity_ = cls.out_entity()
 
         items = []
+        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
         for i in raw_items:
             entity_data_tmp = {c.key: getattr(i, c.key) for c in inspect(i).mapper.column_attrs}
             items.append(out_entity_(**entity_data_tmp))
         return items
 
     @classmethod
-    async def create(cls, data: dict, is_return_require: bool = False) -> OuterGenericType | None:
+    async def create(
+        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
+    ) -> OuterGenericType | None:
         data_copy = data.copy()
 
         # Handle explicit ID if provided, otherwise let database auto-increment
@@ -303,7 +346,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 await session.commit()
                 raw = result.fetchone()
                 if raw:
-                    out_entity_ = cls.out_entity()
+                    out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
                     # Convert Row to dict using column names
                     entity_data = dict(zip([col.name for col in model_table.columns.values()], raw))
                     return out_entity_(**entity_data)
@@ -321,7 +364,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
         if not items:
             return []
@@ -341,7 +384,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                 await session.commit()
 
                 raw_items = result.fetchall()
-                out_entity_ = cls.out_entity()
+                out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
                 created_items = []
                 column_names = [col.name for col in model_table.columns.values()]
                 for raw in raw_items:
@@ -357,7 +400,11 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
     @classmethod
     async def update(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
     ) -> OuterGenericType | None:
         data_copy = deepcopy(data)
 
@@ -374,19 +421,21 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             await session.commit()
 
         if is_return_require:
-            return await cls.get_first(filter_data=filter_data)
+            return await cls.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
         return None
 
     @classmethod
     async def _update_single_with_returning(
-        cls, session: Any, item_data: dict, model_table: Any, out_entity_: Callable
+        cls, session: Any, item_data: dict, out_entity_: Callable
     ) -> OuterGenericType | None:
         """Update a single item and return the updated entity"""
         if "id" not in item_data:
             return None
 
+        model_class = cls.model()  # type: ignore
+        model_table = model_class.__table__  # type: ignore
+
         item_id = item_data.pop("id")
-        model_class: Type[Base] = cls.model()
         stmt = (
             update(model_class)
             .where(model_class.id == item_id)  # type: ignore
@@ -404,9 +453,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
     @classmethod
     async def update_bulk(
-        cls,
-        items: List[dict],
-        is_return_require: bool = False,
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
         if not items:
             return None
@@ -417,7 +464,7 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
         async with get_session(expire_on_commit=True) as session:
             if is_return_require:
-                return await cls._bulk_update_with_returning(session, items_copy)
+                return await cls._bulk_update_with_returning(session, items_copy, out_dataclass)
             else:
                 await cls._bulk_update_without_returning(session, items_copy)
                 return None
@@ -443,15 +490,15 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                     item["created_at"] = dt_
 
     @classmethod
-    async def _bulk_update_with_returning(cls, session: Any, items: List[dict]) -> List[OuterGenericType]:
+    async def _bulk_update_with_returning(
+        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
+    ) -> List[OuterGenericType]:
         """Perform bulk update with RETURNING for result collection"""
         updated_items = []
-        out_entity_ = cls.out_entity()
-        model_class = cls.model()  # type: ignore
-        model_table = model_class.__table__  # type: ignore
+        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
 
         for item_data in items:
-            updated_item = await cls._update_single_with_returning(session, item_data, model_table, out_entity_)
+            updated_item = await cls._update_single_with_returning(session, item_data, out_entity_)
             if updated_item:
                 updated_items.append(updated_item)
 
@@ -466,7 +513,11 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
 
     @classmethod
     async def update_or_create(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
     ) -> OuterGenericType | None:
         is_exists = await cls.is_exists(filter_data=filter_data)
         if is_exists:
