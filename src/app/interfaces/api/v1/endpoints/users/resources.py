@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from src.app.interfaces.api.core.dependencies import validate_auth_data
 from src.app.interfaces.api.v1.endpoints.users.schemas.resp_schemas import MeResp
-from src.app.domain.users.container import container as services_container
+from src.app.application.container import container as services_container
 
 router = APIRouter(prefix="/users")
 

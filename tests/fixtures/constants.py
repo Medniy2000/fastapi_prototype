@@ -5,7 +5,7 @@ from typing import List
 
 from dateutil.relativedelta import relativedelta
 
-from src.app.core.utils.common import generate_str
+from src.app.infrastructure.utils.common import generate_str
 
 USER_CREATED_AT = datetime.utcnow() - relativedelta(months=6)
 USER_UPDATED_AT = USER_CREATED_AT

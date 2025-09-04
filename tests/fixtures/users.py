@@ -4,8 +4,8 @@ import pytest
 from loguru import logger
 from sqlalchemy import delete, insert, text
 
-from src.app.core.models.container import container as models_container
-from src.app.extensions.psql_ext.psql_ext import get_session
+from src.app.infrastructure.persistence.models.container import container as models_container
+from src.app.infrastructure.extensions.psql_ext.psql_ext import get_session
 from tests.fixtures.constants import USERS
 
 

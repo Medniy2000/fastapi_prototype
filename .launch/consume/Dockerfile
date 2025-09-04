@@ -15,4 +15,4 @@ CMD alembic upgrade head
 
 ENV PYTHONPATH=/app
 
-CMD alembic upgrade head && python -m src.app.consume
+CMD alembic upgrade head && python -m src.app.interfaces.cli.consume

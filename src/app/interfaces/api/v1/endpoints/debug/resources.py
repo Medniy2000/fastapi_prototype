@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Request
 
 from src.app.interfaces.api.v1.endpoints.debug.schemas.req_schemas import MessageReq
 from src.app.config.settings import settings
-from src.app.extensions.mq_ext.mq_ext import mq_client
+from src.app.infrastructure.messaging.mq_client import mq_client
 
 router = APIRouter(prefix="/debug")
 

@@ -8,7 +8,7 @@ from src.app.interfaces.api.core.jwt import JWTHelper
 from src.app.interfaces.api.v1.endpoints.auth.schemas.req_schemas import SignUpReq
 from src.app.interfaces.api.v1.endpoints.auth.schemas.req_schemas import TokenReq
 from src.app.interfaces.api.v1.endpoints.auth.schemas.resp_schemas import SignupResp, TokenResp
-from src.app.domain.users.container import container as services_container
+from src.app.application.container import container as services_container
 
 router = APIRouter(prefix="/auth")
 
