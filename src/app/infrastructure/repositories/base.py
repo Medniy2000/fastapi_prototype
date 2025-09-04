@@ -25,7 +25,6 @@ OuterGenericType = TypeVar("OuterGenericType", bound=BaseOutputEntity)
 
 class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
-    OUT_ENTITY: Any = None
 
     @classmethod
     async def count(cls, filter_data: dict) -> int:
@@ -95,7 +94,6 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
 
 class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
-    OUT_ENTITY: Any = None  # dataclass with required schema
 
     __ATR_SEPARATOR: str = "__"
     LOOKUP_MAP = {
