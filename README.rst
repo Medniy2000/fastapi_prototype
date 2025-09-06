@@ -36,6 +36,24 @@ Tech Stack
 - **Containerization**
   - Docker
 
+
+Running the App via scripts, docker
+======================
+
+.. code-block:: bash
+
+    # launch required containers
+    # use bash local_prepare.sh --recreate if recreate infrustructure required
+    bash local_prepare.sh
+
+    # launch app
+    bash local_run.sh
+    # use flags:
+    #           --recreate if recreate, rebuild required
+    #           --run_api  if run API container required
+
+
+
 Running the App Locally
 ======================
 
@@ -45,33 +63,24 @@ Running the App Locally
     poetry env use 3.12
     poetry install
     poetry update
-    cp .env.example .env
+    bash local_prepare.sh  # launch required containers
 
 .. admonition:: Tips
    :class: tip
 
-   After setup, make sure to start your database and message broker before running the app.
-
-Run API
--------
+    Make sure all required containers are running before running the app.
 
 .. code-block:: bash
 
-    uvicorn src.app.main:app --reload --port 8081
+    # run API
+    uvicorn src.app.interfaces.cli.main:app --reload --port 8081
 
-Run Celery Worker
------------------
+    # run Celery
+    celery -A src.app.interfaces.cli.celery_app worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h
 
-.. code-block:: bash
-
-    celery -A src.app.extensions.celery_ext.celery_app worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h
-
-Run Consumer
-------------
-
-.. code-block:: bash
-
+    # run Consumer
     python -m src.app.consume
+
 
 API Documentation
 =================
@@ -114,48 +123,42 @@ Documentation Commands
     make html
     # open /docs/build/index.html
 
-Running with Docker
+Docker Commands
 ==================
-
-Start Redis for Celery:
-
-.. code-block:: bash
-
-    docker run -d --name my_local_redis -p 6379:6379 redis:latest
 
 Build and run Celery:
 
 .. code-block:: bash
 
-    docker build -t celery_img --no-cache -f .launch/celery/Dockerfile .
-    docker run -d --name my_local_celery --shm-size="512m" --cpus=2 \
+
+    docker build -t api_img --no-cache -f .launch/api/Dockerfile .
+    docker build -t celery_img --no-cache -f.launch/celery/Dockerfile .
+    docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
+
+    docker run -d --env-file --name my_local_api \
+        --env-file ./.env \
+        --shm-size="1g" \
+        --cpus=1 -p 8081:8081 \
+        api_img
+
+    docker run -d --name my_local_celery
+        --shm-size="512m" \
+        --cpus=2 \
         --env-file ./.env \
         -e CELERY_ARGS="worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h" \
         celery_img
 
-Run Flower:
-
-.. code-block:: bash
+    docker run -d --name my_local_consume \
+        --env-file .env \
+        --shm-size="512m" \
+        --cpus=1 \
+        consume_img
 
     docker run -d --name my_local_flower \
         -e broker_url=redis://172.17.0.1:6379/11 \
         -e CELERY_BROKER_URL=redis://172.17.0.1:6379/11 \
         -e CELERY_BROKER_API=redis://172.17.0.1:6379/12 \
         -p 5555:5555 mher/flower
-
-Build and run API:
-
-.. code-block:: bash
-
-    docker build -t api_img --no-cache -f .launch/api/Dockerfile .
-    docker run -d --env-file ./.env --name my_local_api --shm-size="1g" --cpus=1 -p 8081:8081 api_img
-
-Build and run Consumer:
-
-.. code-block:: bash
-
-    docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
-    docker run -d --env-file .env --name my_local_consume --shm-size="512m" --cpus=1 consume_img
 
 Running Tests
 =============

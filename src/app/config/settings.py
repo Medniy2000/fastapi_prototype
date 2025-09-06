@@ -23,7 +23,7 @@ class SettingsBase(PydanticSettings):
     # Base Settings
     # --------------------------------------------------------------------------
     PROJECT_NAME: str = env.str("PROJECT_NAME", "Project")
-    PROJECT_NAME_SLUG: str = slugify(PROJECT_NAME)
+    PROJECT_NAME_SLUG: str = env.str("PROJECT_NAME_SLUG", "") or slugify(PROJECT_NAME)
     TEAM_CONTACT_EMAIL: str = env.str("TEAM_CONTACT_EMAIL", "yourteam@example.com")
     SECRET_KEY: str = env.str("SECRET_KEY", secrets.token_urlsafe(32))
 
