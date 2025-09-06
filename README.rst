@@ -77,10 +77,6 @@ Project Structure
       ├── alembic.ini                 # Database migrations
       └── docker-compose-tests.yml    # Test environment
 
-
-
-
-
 Running the App via scripts, docker::
 
     # launch required infrastructure containers
@@ -148,7 +144,7 @@ Documentation Commands::
 Docker Commands::
 
     docker build -t api_img --no-cache -f .launch/api/Dockerfile .
-    docker build -t celery_img --no-cache -f.launch/celery/Dockerfile .
+    docker build -t celery_img --no-cache -f .launch/celery/Dockerfile .
     docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
 
     docker run -d --env-file --name my_local_api \
@@ -157,7 +153,7 @@ Docker Commands::
         --cpus=1 -p 8081:8081 \
         api_img
 
-    docker run -d --name my_local_celery
+    docker run -d --name my_local_celery \
         --shm-size="512m" \
         --cpus=2 \
         --env-file ./.env \
@@ -179,6 +175,4 @@ Docker Commands::
 Running Tests::
 
     docker-compose -f docker-compose-tests.yml up --abort-on-container-exit
-    docker-compose -f docker-compose-tests.yml rm -fsv && \
-    docker rmi $(docker images '*x_test*' -a -q) && \
-    docker system prune
+    docker-compose -f docker-compose-tests.yml rm -fsv && docker rmi $(docker images '*x_test*' -a -q) && docker system prune
