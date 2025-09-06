@@ -122,6 +122,27 @@ Database Migrations::
     alembic revision --autogenerate -m "some message"
     alembic upgrade head
 
+gRPC::
+
+    # Generate services
+
+    python -m grpc_tools.protoc \
+        --proto_path ./src/app/interfaces/grpc/protos \
+        --python_out=./src/app/interfaces/grpc/pb/debug \
+        --grpc_python_out=./src/app/interfaces/grpc/pb/debug ./src/app/interfaces/grpc/protos/debug.proto
+
+    python -m grpc_tools.protoc \
+        --proto_path ./src/app/interfaces/grpc/protos \
+        --python_out=./src/app/interfaces/grpc/pb/example \
+        --grpc_python_out=./src/app/interfaces/grpc/pb/example ./src/app/interfaces/grpc/protos/example.proto
+
+    # Run server
+    $ python -m src.app.interfces.grpc.server
+
+    # Run test client
+    $ python -m src.app.interfaces.grpc.client
+
+
 Code Quality Checks::
 
     bash beautify.sh
