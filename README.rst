@@ -36,41 +36,76 @@ Tech Stack
 - **Containerization**
   - Docker
 
+Project Structure
+=================
 
-Running the App via scripts, docker
-======================
+.. code-block:: text
 
-.. code-block:: bash
+          fastapi_prototype/
+      ├── .launch/                     # Docker launch configurations
+      │   ├── api/
+      │   ├── celery/
+      │   ├── consume/
+      │   └── tests/
+      ├── docs/                        # Documentation
+      │   └── source/
+      ├── src/                         # Main source code
+      │   └── app/
+      │       ├── application/         # Application layer
+      │       │   ├── common/
+      │       │   └── services/
+      │       ├── config/              # Configuration
+      │       ├── domain/              # Domain layer
+      │       ├── infrastructure/      # Infrastructure layer
+      │       │   ├── common/
+      │       │   ├── extensions/
+      │       │   ├── messaging/
+      │       │   ├── persistence/
+      │       │   ├── repositories/
+      │       │   ├── tasks/
+      │       │   └── utils/
+      │       └── interfaces/          # API interfaces
+      ├── static/                      # Static files
+      ├── tests/                       # Test files
+      │   ├── application/
+      │   ├── domain/
+      │   ├── fixtures/
+      │   └── infrastructure/
+      ├── .env.example                # Environment variables example
+      ├── pyproject.toml              # Python dependencies
+      ├── README.rst                  # Project documentation
+      ├── alembic.ini                 # Database migrations
+      └── docker-compose-tests.yml    # Test environment
 
-    # launch required containers
-    # use bash local_prepare.sh --recreate if recreate infrustructure required
+
+
+
+
+Running the App via scripts, docker::
+
+    # launch required infrastructure containers
     bash local_prepare.sh
+    # use --recreate if recreate, rebuild required
+    # example: bash local_prepare.sh --recreate
 
     # launch app
     bash local_run.sh
     # use flags:
     #           --recreate if recreate, rebuild required
     #           --run_api  if run API container required
+    # example: bash local_run.sh --recreate --run_api
 
 
 
-Running the App Locally
-======================
-
-.. code-block:: bash
+Running the App locally::
 
     cd <path_to>/{your_project_name}
     poetry env use 3.12
     poetry install
     poetry update
     bash local_prepare.sh  # launch required containers
+    # !! make sure all required containers were launched before running the app.
 
-.. admonition:: Tips
-   :class: tip
-
-    Make sure all required containers are running before running the app.
-
-.. code-block:: bash
 
     # run API
     uvicorn src.app.interfaces.cli.main:app --reload --port 8081
@@ -82,32 +117,21 @@ Running the App Locally
     python -m src.app.consume
 
 
-API Documentation
-=================
-
-.. code-block:: text
+API Documentation::
 
     http://<your_domain:port>/docs
 
-Database Migrations
-==================
-
-.. code-block:: bash
+Database Migrations::
 
     alembic revision --autogenerate -m "some message"
     alembic upgrade head
 
-Code Quality Checks
-==================
-
-.. code-block:: bash
+Code Quality Checks::
 
     bash beautify.sh
 
-Documentation Commands
-=====================
 
-.. code-block:: bash
+Documentation Commands::
 
     # Initial setup
     pip install sphinx
@@ -115,21 +139,13 @@ Documentation Commands
     cd docs
     sphinx-quickstart
 
-.. code-block:: bash
-
     # Build documentation
     cd <path_to>/docs
     # describe your docs in <path_to>/docs/source/*.rst
     make html
     # open /docs/build/index.html
 
-Docker Commands
-==================
-
-Build and run Celery:
-
-.. code-block:: bash
-
+Docker Commands::
 
     docker build -t api_img --no-cache -f .launch/api/Dockerfile .
     docker build -t celery_img --no-cache -f.launch/celery/Dockerfile .
@@ -160,10 +176,7 @@ Build and run Celery:
         -e CELERY_BROKER_API=redis://172.17.0.1:6379/12 \
         -p 5555:5555 mher/flower
 
-Running Tests
-=============
-
-.. code-block:: bash
+Running Tests::
 
     docker-compose -f docker-compose-tests.yml up --abort-on-container-exit
     docker-compose -f docker-compose-tests.yml rm -fsv && \
