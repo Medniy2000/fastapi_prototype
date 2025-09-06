@@ -137,7 +137,7 @@ gRPC::
         --grpc_python_out=./src/app/interfaces/grpc/pb/example ./src/app/interfaces/grpc/protos/example.proto
 
     # Run server
-    $ python -m src.app.interfces.grpc.server
+    $ python -m src.app.interfaces.grpc.server
 
     # Run test client
     $ python -m src.app.interfaces.grpc.client
