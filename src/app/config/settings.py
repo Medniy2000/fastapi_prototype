@@ -35,6 +35,7 @@ class SettingsBase(PydanticSettings):
     # API Settings
     # --------------------------------------------------------------------------
     API: str = "/api"
+    API_PORT: int = env.int("API_PORT", 8000)
     CORS_ORIGIN_WHITELIST: List[str] = env.list("CORS_ORIGIN_WHITELIST", ["*"])
     API_DEFAULT_LIMIT: int = env.int("API_DEFAULT_LIMIT", 25)
     API_LIMIT_ALLOWED_VALUES_LIST: List[int] = env.list("API_LIMIT_ALLOWED_VALUES_LIST", [1, 5, 10, 15, 25])

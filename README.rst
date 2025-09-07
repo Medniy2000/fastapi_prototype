@@ -89,6 +89,7 @@ Running the App via scripts, docker::
     # use flags:
     #           --recreate if recreate, rebuild required
     #           --run_api  if run API container required
+    #           --run_grpc  if run gRPC container required
     # example: bash local_run.sh --recreate --run_api
 
 
@@ -111,6 +112,9 @@ Running the App locally::
 
     # run Consumer
     python -m src.app.consume
+
+    # run gRPC server
+    python -m src.app.interfaces.grpc.server
 
 
 API Documentation::

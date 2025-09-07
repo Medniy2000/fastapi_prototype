@@ -47,40 +47,53 @@ done < "$INPUT_ENV_FILE"
 DOCKER_PREFIX="local"
 RECREATE=false
 RUN_API=false
+RUN_GRPC=false
 
 # Parse script arguments
 while [ "$#" -gt 0 ]; do
     case $1 in
         --recreate) RECREATE=true ;;
         --run_api)  RUN_API=true ;;
+        --run_grpc)  RUN_GRPC=true ;;
     esac
     shift
 done
 
+
+IMAGE_CELERY="celery_img"
+IMAGE_CONSUME="consume_img"
+IMAGE_API="api_img"
+IMAGE_GRPC="grpc_img"
 # ----------------------------------------------------------------------
-# Recreate containers and images if requested
+# REBUILD images, remove old containers and images if requested
 # ----------------------------------------------------------------------
 if [ "$RECREATE" = true ]; then
     # Remove old containers
     docker ps -a --filter "name=${DOCKER_PREFIX}*" --format "{{.ID}}" | xargs -r docker rm -f
 
     # Remove old images
-    docker rmi celery_img
-    docker rmi consume_img
-    docker rmi api_img
+    docker rmi $IMAGE_CELERY || true
+    docker rmi $IMAGE_CONSUME || true
+    docker rmi $IMAGE_API || true
+    docker rmi $IMAGE_GRPC || true
 
     echo "  🗑️  Removed old containers and images"
 
     # Build new images
-    docker build -t celery_img --no-cache -f .launch/celery/Dockerfile .
+    docker build -t $IMAGE_CELERY --no-cache -f .launch/celery/Dockerfile .
     echo "  🏗️  Built celery_img image"
 
-    docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
+    docker build -t $IMAGE_CONSUME --no-cache -f .launch/consume/Dockerfile .
     echo "  🏗️  Built consume_img image"
 
     if [ "$RUN_API" = true ]; then
-        docker build -t api_img --no-cache -f .launch/api/Dockerfile .
+        docker build -t $IMAGE_API --no-cache -f .launch/api/Dockerfile .
         echo "  🏗️  Built api_img image"
+    fi
+
+    if [ "$RUN_GRPC" = true ]; then
+        docker build -t $IMAGE_GRPC --no-cache -f .launch/grpc/Dockerfile .
+        echo "  🏗️  Built grpc_img image"
     fi
 fi
 
@@ -95,7 +108,7 @@ if [ ! "$(docker ps -aq -f name=${DOCKER_PREFIX}_celery)" ]; then
         --shm-size="512m" \
         --cpus=2 \
         -e CELERY_ARGS="worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h" \
-        celery_img || true
+        $IMAGE_CELERY || true
 
     docker run -d --name "${DOCKER_PREFIX}_flower" \
         -e broker_url=$CELERY_BROKER_URL \
@@ -113,7 +126,7 @@ if [ ! "$(docker ps -aq -f name=${DOCKER_PREFIX}_consume)" ]; then
         --env-file ./.env_docker \
         --shm-size="512m" \
         --cpus=1 \
-        consume_img || true
+        $IMAGE_CONSUME || true
 fi
 echo "  ✅ ${DOCKER_PREFIX}_consume UP"
 
@@ -124,11 +137,25 @@ if [ -z "$(docker ps -aq -f name=${DOCKER_PREFIX}_api)" ] && [ "$RUN_API" = true
         --env-file ./.env_docker \
         --shm-size="1g" \
         --cpus=1 \
-        -p 8081:8081 \
-        api_img || true
+        -p $API_PORT:$API_PORT \
+        $IMAGE_API || true
 fi
 if [ "$RUN_API" = true ]; then
 echo "  ✅ ${DOCKER_PREFIX}_api UP"
+fi
+
+# gRpc container (optional)
+if [ -z "$(docker ps -aq -f name=${DOCKER_PREFIX}_grpc)" ] && [ "$RUN_GRPC" = true ]; then
+    docker run -d \
+        --name "${DOCKER_PREFIX}_grpc" \
+        --env-file ./.env_docker \
+        --shm-size="1g" \
+        --cpus=1 \
+        -p $GRPC_PORT:$GRPC_PORT \
+        $IMAGE_GRPC || true
+fi
+if [ "$RUN_GRPC" = true ]; then
+echo "  ✅ ${DOCKER_PREFIX}_grpc UP"
 fi
 
 
@@ -136,9 +163,12 @@ fi
 # Print results
 # ----------------------------------------------------------------------
 echo ""
-echo "-----------------------------------------------------------------"
+echo "-------------------------------------------------------------------------------"
 if [ "$RUN_API" = true ]; then
-echo "   💎  http://0.0.0.0:8081/docs  - API"
+echo "   💎  http://0.0.0.0:${API_PORT}/docs **** API"
 fi
-echo "   ⚙️  http://0.0.0.0:5555       - Flower[celery monitoring]"
-echo "----------------------------------------------------------------"
+if [ "$RUN_GRPC" = true ]; then
+echo "   💎  http://0.0.0.0:${GRPC_PORT}/ ******* gRpc"
+fi
+echo "   ⚙️  http://0.0.0.0:5555 ********* Flower[celery monitoring]"
+echo "-------------------------------------------------------------------------------"
