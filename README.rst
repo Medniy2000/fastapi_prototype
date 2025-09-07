@@ -89,6 +89,7 @@ Running the App via scripts, docker::
     # use flags:
     #           --recreate if recreate, rebuild required
     #           --run_api  if run API container required
+    #           --run_grpc  if run gRPC container required
     # example: bash local_run.sh --recreate --run_api
 
 
@@ -112,6 +113,9 @@ Running the App locally::
     # run Consumer
     python -m src.app.consume
 
+    # run gRPC server
+    python -m src.app.interfaces.grpc.server
+
 
 API Documentation::
 
@@ -121,6 +125,27 @@ Database Migrations::
 
     alembic revision --autogenerate -m "some message"
     alembic upgrade head
+
+gRPC::
+
+    # Generate services
+
+    python -m grpc_tools.protoc \
+        --proto_path ./src/app/interfaces/grpc/protos \
+        --python_out=./src/app/interfaces/grpc/pb/debug \
+        --grpc_python_out=./src/app/interfaces/grpc/pb/debug ./src/app/interfaces/grpc/protos/debug.proto
+
+    python -m grpc_tools.protoc \
+        --proto_path ./src/app/interfaces/grpc/protos \
+        --python_out=./src/app/interfaces/grpc/pb/example \
+        --grpc_python_out=./src/app/interfaces/grpc/pb/example ./src/app/interfaces/grpc/protos/example.proto
+
+    # Run server
+    $ python -m src.app.interfaces.grpc.server
+
+    # Run test client
+    $ python -m src.app.interfaces.grpc.client
+
 
 Code Quality Checks::
 

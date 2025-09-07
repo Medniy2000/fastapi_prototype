@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package grpc.pb.example;
+
+
+message ExampleReq{
+  int32 example_id = 1;
+}
+
+message ExampleResp {
+  string example_message = 1;
+}
+
+service ExampleService {
+  rpc GetExample(ExampleReq) returns (ExampleResp) {}
+}
