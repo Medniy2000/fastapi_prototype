@@ -42,6 +42,21 @@ def test_users_repository_get_first_by_attr_name(e_loop: AbstractEventLoop, user
                 assert getattr(user, key) == value
 
 
+def test_users_repository_get_first_by_attr_name_without_out_dataclass(
+    e_loop: AbstractEventLoop, users: Any
+) -> None:
+    users_repository = repo_container.users_repository
+    attr_names = ["id", "uuid", "email"]
+    for user_raw in USERS:
+        for attr_name in attr_names:
+            user: Type[UserTestAggregate] | None = e_loop.run_until_complete(
+                users_repository.get_first(filter_data={attr_name: user_raw.get(attr_name)})
+            )
+            assert isinstance(user, UserTestAggregate) is False
+            for key, value in user_raw.items():
+                assert getattr(user, key) == value
+
+
 def test_users_get_list_basic(e_loop: AbstractEventLoop, users: Any) -> None:
     users_repository = repo_container.users_repository
     items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
@@ -52,6 +67,17 @@ def test_users_get_list_basic(e_loop: AbstractEventLoop, users: Any) -> None:
     raw_ids = [i["id"] for i in USERS]
     for user in items:
         assert isinstance(user, UserTestAggregate) is True
+        assert user.id in raw_ids
+
+
+def test_users_get_list_without_out_dataclass(e_loop: AbstractEventLoop, users: Any) -> None:
+    users_repository = repo_container.users_repository
+    items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(users_repository.get_list())
+    assert isinstance(items, list) is True
+    assert len(items) == len(USERS)
+    raw_ids = [i["id"] for i in USERS]
+    for user in items:
+        assert isinstance(user, UserTestAggregate) is False
         assert user.id in raw_ids
 
 
