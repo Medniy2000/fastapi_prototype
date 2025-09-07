@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+import datetime as dt
 from typing import Any, Dict
 
 
@@ -8,9 +8,9 @@ class UserTestAggregate:
     id: int
     uuid: str
     meta: Dict[str, Any] | Any
-    created_at: datetime
-    updated_at: datetime
-    birthday: datetime | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    birthday: dt.datetime | None
     first_name: str | None
     last_name: str | None
     email: str

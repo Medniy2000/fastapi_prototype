@@ -1,7 +1,7 @@
 import uuid
 from asyncio import AbstractEventLoop
 from copy import deepcopy
-from datetime import datetime
+import datetime as dt
 from typing import Any, List, Type
 
 import pytest
@@ -61,13 +61,13 @@ def test_users_repository_create(e_loop: AbstractEventLoop, users: Any) -> None:
     user_data_raw = {
         "id": 999,
         "uuid": uuid.uuid4().__str__(),
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n",
             "last_name": "last_name_n",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n",
         "last_name": "last_name_n",
@@ -93,7 +93,7 @@ def test_users_repository_create_without_id_and_uuid(e_loop: AbstractEventLoop, 
             "first_name": "first_name_n",
             "last_name": "last_name_n",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n",
         "last_name": "last_name_n",
@@ -122,7 +122,7 @@ def test_users_repository_create_is_not_return(e_loop: AbstractEventLoop, users:
             "first_name": "first_name_n",
             "last_name": "last_name_n",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n",
         "last_name": "last_name_n",
@@ -145,13 +145,13 @@ def test_users_repository_create_bulk(e_loop: AbstractEventLoop, users: Any) -> 
     user_data_raw_1 = {
         "id": 998,
         "uuid": uuid.uuid4().__str__(),
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n1",
             "last_name": "last_name_n1",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n1",
         "last_name": "last_name_n1",
@@ -160,13 +160,13 @@ def test_users_repository_create_bulk(e_loop: AbstractEventLoop, users: Any) -> 
     user_data_raw_2 = {
         "id": 999,
         "uuid": uuid.uuid4().__str__(),
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n2",
             "last_name": "last_name_n2",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n2",
         "last_name": "last_name_n2",
@@ -194,26 +194,26 @@ def test_users_repository_create_bulk_without_id_uuid(e_loop: AbstractEventLoop,
     users_repository = repo_container.users_repository
 
     user_data_raw_1 = {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n1",
             "last_name": "last_name_n1",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n1",
         "last_name": "last_name_n1",
         "email": "n1" + generate_str(5) + "@gmail.com",
     }
     user_data_raw_2 = {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n2",
             "last_name": "last_name_n2",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n2",
         "last_name": "last_name_n2",
@@ -243,26 +243,26 @@ def test_users_repository_create_bulk_is_not_return(e_loop: AbstractEventLoop, u
     users_repository = repo_container.users_repository
 
     user_data_raw_1 = {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n1",
             "last_name": "last_name_n1",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n1",
         "last_name": "last_name_n1",
         "email": "n1" + generate_str(5) + "@gmail.com",
     }
     user_data_raw_2 = {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n2",
             "last_name": "last_name_n2",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n2",
         "last_name": "last_name_n2",
@@ -309,7 +309,7 @@ def test_users_repository_update_partial(e_loop: AbstractEventLoop, users: Any) 
 
     user_data = deepcopy(USERS[0])
     user_data_raw = {
-        "updated_at": datetime.utcnow(),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "first_name": "updated_first_name_1",
         "last_name": "updated_last_name_1",
     }
@@ -339,7 +339,7 @@ def test_users_repository_update_without_return(e_loop: AbstractEventLoop, users
 
     user_data = deepcopy(USERS[0])
     user_data_raw = {
-        "updated_at": datetime.utcnow(),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "first_name": "updated_first_name_1",
         "last_name": "updated_last_name_1",
     }
@@ -393,13 +393,13 @@ def test_users_repository_bulk_update_partial(e_loop: AbstractEventLoop, users: 
     item_1_to_update = {
         "id": USERS[0]["id"],
         "uuid": str(USERS[0]["uuid"]),
-        "updated_at": datetime.utcnow(),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "first_name": "updated_1_first_name",
     }
     item_2_to_update = {
         "id": USERS[1]["id"],
         "uuid": str(USERS[1]["uuid"]),
-        "updated_at": datetime.utcnow(),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "first_name": "updated_2_first_name",
     }
 
@@ -465,26 +465,26 @@ USERS_UPDATE_OR_CREATE = [
     USERS[0],
     USERS[1],
     {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n1",
             "last_name": "last_name_n1",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n1",
         "last_name": "last_name_n1",
         "email": "n1" + generate_str(5) + "@gmail.com",
     },
     {
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
+        "updated_at": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "meta": {
             "first_name": "first_name_n2",
             "last_name": "last_name_n2",
         },
-        "birthday": datetime.utcnow(),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None),
         "is_active": True,
         "first_name": "first_name_n2",
         "last_name": "last_name_n2",

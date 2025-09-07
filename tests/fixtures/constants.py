@@ -1,13 +1,13 @@
 import random
 import uuid
-from datetime import datetime
+import datetime as dt
 from typing import List
 
 from dateutil.relativedelta import relativedelta
 
 from src.app.infrastructure.utils.common import generate_str
 
-USER_CREATED_AT = datetime.utcnow() - relativedelta(months=6)
+USER_CREATED_AT = dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=6)
 USER_UPDATED_AT = USER_CREATED_AT
 USERS: List = [
     {
@@ -19,7 +19,7 @@ USERS: List = [
             "first_name": "first_name_1",
             "last_name": "last_name_1",
         },
-        "birthday": datetime.utcnow() - relativedelta(months=random.randint(2, 12)),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=random.randint(2, 12)),
         "is_active": True,
         "first_name": "first_name_1",
         "last_name": "last_name_1",
@@ -34,7 +34,7 @@ USERS: List = [
             "first_name": "first_name_2",
             "last_name": "last_name_2",
         },
-        "birthday": datetime.utcnow() - relativedelta(months=random.randint(2, 12)),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=random.randint(2, 12)),
         "is_active": True,
         "first_name": "first_name_2",
         "last_name": "last_name_2",
@@ -49,7 +49,7 @@ USERS: List = [
             "first_name": "first_name_3",
             "last_name": "last_name_3",
         },
-        "birthday": datetime.utcnow() - relativedelta(months=random.randint(2, 12)),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=random.randint(2, 12)),
         "is_active": True,
         "first_name": "first_name_3",
         "last_name": "last_name_3",
@@ -64,7 +64,7 @@ USERS: List = [
             "first_name": "first_name_4",
             "last_name": "last_name_4",
         },
-        "birthday": datetime.utcnow() - relativedelta(months=random.randint(2, 12)),
+        "birthday": dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=random.randint(2, 12)),
         "is_active": True,
         "first_name": "first_name_4",
         "last_name": "last_name_4",
