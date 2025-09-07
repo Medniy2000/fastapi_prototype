@@ -63,3 +63,6 @@ target-version = ['py311']
 python_version=3.12
 disallow_untyped_defs=1
 ignore_missing_imports=1
+exclude = [
+    "src/app/interfaces/grpc/"
+]

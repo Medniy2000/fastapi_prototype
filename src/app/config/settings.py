@@ -40,7 +40,7 @@ class SettingsBase(PydanticSettings):
     API_DEFAULT_LIMIT: int = env.int("API_DEFAULT_LIMIT", 25)
     API_LIMIT_ALLOWED_VALUES_LIST: List[int] = env.list("API_LIMIT_ALLOWED_VALUES_LIST", [1, 5, 10, 15, 25])
     SHOW_API_DOCS: bool = env.bool("SHOW_API_DOCS", False)
-    
+
     # GRPC Settings
     # --------------------------------------------------------------------------
     GRPC_HOST: Optional[str] = env.str("GRPC_HOST", "")
