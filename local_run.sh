@@ -60,6 +60,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 
+BASE_IMAGE="base_img"
 IMAGE_CELERY="celery_img"
 IMAGE_CONSUME="consume_img"
 IMAGE_API="api_img"
@@ -72,6 +73,7 @@ if [ "$RECREATE" = true ]; then
     docker ps -a --filter "name=${DOCKER_PREFIX}*" --format "{{.ID}}" | xargs -r docker rm -f
 
     # Remove old images
+    docker rmi $BASE_IMAGE || true
     docker rmi $IMAGE_CELERY || true
     docker rmi $IMAGE_CONSUME || true
     docker rmi $IMAGE_API || true
@@ -80,20 +82,24 @@ if [ "$RECREATE" = true ]; then
     echo "  🗑️  Removed old containers and images"
 
     # Build new images
-    docker build -t $IMAGE_CELERY --no-cache -f .launch/celery/Dockerfile .
+    docker build -t $BASE_IMAGE --no-cache -f .launch/Dockerfile_base .
+    echo "  🏗️  Built ${BASE_IMAGE} image"
+
+
+    docker build --build-arg BASE_IMAGE=$BASE_IMAGE -t $IMAGE_CELERY --no-cache -f .launch/celery/Dockerfile .
     echo "  🏗️  Built celery_img image"
 
-    docker build -t $IMAGE_CONSUME --no-cache -f .launch/consume/Dockerfile .
-    echo "  🏗️  Built consume_img image"
+    docker build --build-arg BASE_IMAGE=$BASE_IMAGE -t $IMAGE_CONSUME --no-cache -f .launch/consume/Dockerfile .
+    echo "  🏗️  Built ${IMAGE_CONSUME} image"
 
     if [ "$RUN_API" = true ]; then
-        docker build -t $IMAGE_API --no-cache -f .launch/api/Dockerfile .
-        echo "  🏗️  Built api_img image"
+        docker build --build-arg BASE_IMAGE=$BASE_IMAGE -t $IMAGE_API --no-cache -f .launch/api/Dockerfile .
+        echo "  🏗️  Built ${IMAGE_API} image"
     fi
 
     if [ "$RUN_GRPC" = true ]; then
-        docker build -t $IMAGE_GRPC --no-cache -f .launch/grpc/Dockerfile .
-        echo "  🏗️  Built grpc_img image"
+        docker build --build-arg BASE_IMAGE=$BASE_IMAGE -t $IMAGE_GRPC --no-cache -f .launch/grpc/Dockerfile .
+        echo "  🏗️  Built ${IMAGE_GRPC} image"
     fi
 fi
 
@@ -116,8 +122,8 @@ if [ ! "$(docker ps -aq -f name=${DOCKER_PREFIX}_celery)" ]; then
         -e CELERY_BROKER_API=$CELERY_RESULT_BACKEND \
         -p 5555:5555 mher/flower
 fi
-echo "  ✅ ${DOCKER_PREFIX}_celery UP"
-echo "  ✅ ${DOCKER_PREFIX}_flower UP"
+echo "  ✅   ${DOCKER_PREFIX}_celery UP"
+echo "  ✅   ${DOCKER_PREFIX}_flower UP"
 
 # Consume container
 if [ ! "$(docker ps -aq -f name=${DOCKER_PREFIX}_consume)" ]; then
@@ -128,7 +134,7 @@ if [ ! "$(docker ps -aq -f name=${DOCKER_PREFIX}_consume)" ]; then
         --cpus=1 \
         $IMAGE_CONSUME || true
 fi
-echo "  ✅ ${DOCKER_PREFIX}_consume UP"
+echo "  ✅   ${DOCKER_PREFIX}_consume UP"
 
 # API container (optional)
 if [ -z "$(docker ps -aq -f name=${DOCKER_PREFIX}_api)" ] && [ "$RUN_API" = true ]; then
@@ -141,7 +147,7 @@ if [ -z "$(docker ps -aq -f name=${DOCKER_PREFIX}_api)" ] && [ "$RUN_API" = true
         $IMAGE_API || true
 fi
 if [ "$RUN_API" = true ]; then
-echo "  ✅ ${DOCKER_PREFIX}_api UP"
+echo "  ✅   ${DOCKER_PREFIX}_api UP"
 fi
 
 # gRpc container (optional)
@@ -155,7 +161,7 @@ if [ -z "$(docker ps -aq -f name=${DOCKER_PREFIX}_grpc)" ] && [ "$RUN_GRPC" = tr
         $IMAGE_GRPC || true
 fi
 if [ "$RUN_GRPC" = true ]; then
-echo "  ✅ ${DOCKER_PREFIX}_grpc UP"
+echo "  ✅   ${DOCKER_PREFIX}_grpc UP"
 fi
 
 
