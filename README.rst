@@ -168,9 +168,10 @@ Documentation Commands::
 
 Docker Commands::
 
-    docker build -t api_img --no-cache -f .launch/api/Dockerfile .
-    docker build -t celery_img --no-cache -f .launch/celery/Dockerfile .
-    docker build -t consume_img --no-cache -f .launch/consume/Dockerfile .
+    docker build -t base_img --no-cache -f .launch/Dockerfile_base
+    docker build --build-arg BASE_IMAGE=base_img -t api_img --no-cache -f .launch/api/Dockerfile .
+    docker build --build-arg BASE_IMAGE=base_img -t celery_img --no-cache -f .launch/celery/Dockerfile .
+    docker build --build-arg BASE_IMAGE=base_img -t consume_img --no-cache -f .launch/consume/Dockerfile .
 
     docker run -d --env-file --name my_local_api \
         --env-file ./.env \
