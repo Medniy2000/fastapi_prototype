@@ -1,0 +1,24 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, stage, dev ]
+  pull_request:
+    branches: [ main, stage, dev ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build and run tests
+      run: |
+        docker-compose -f docker-compose-tests-ci.yml up --build --abort-on-container-exit --exit-code-from x_test_service
+
+    - name: Clean up
+      if: always()
+      run: |
+        docker-compose -f docker-compose-tests-ci.yml down -v
+        docker system prune -f
