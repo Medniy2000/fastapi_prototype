@@ -15,10 +15,10 @@ jobs:
 
     - name: Build and run tests
       run: |
-        docker-compose -f docker-compose-tests-ci.yml up --build --abort-on-container-exit --exit-code-from x_test_service
+        docker-compose -f docker-compose-tests.yml up --build --abort-on-container-exit --exit-code-from x_test_service
 
     - name: Clean up
       if: always()
       run: |
-        docker-compose -f docker-compose-tests-ci.yml down -v
+        docker-compose -f docker-compose-tests.yml down -v
         docker system prune -f
