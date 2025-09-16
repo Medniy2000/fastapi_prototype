@@ -21,6 +21,11 @@ DB_USER=dev
 DB_PASSWORD=dev
 DB_NAME=test_db
 
+# GRPC settings
+# ------------------------------------------------------------------------------
+GRPC_HOST=0.0.0.0
+GRPC_PORT=50051
+
 
 # Redis
 # ------------------------------------------------------------------------------
@@ -30,3 +35,10 @@ REDIS_URL=redis://172.17.0.1:6389/0
 # ------------------------------------------------------------------------------
 CELERY_BROKER_URL=redis://172.17.0.1:6389/11
 CELERY_RESULT_BACKEND=redis://172.17.0.1:6389/12
+
+
+# Mesage Broker
+# ------------------------------------------------------------------------------
+MESSAGE_BROKER_URL=amqp://dev:dev@0.0.0.0:5672
+DEFAULT_EXCHANGER=YOUR_DEFAULT_EXCHANGER
+DEFAULT_QUEUE=YOUR_DEFAULT_QUEUE
