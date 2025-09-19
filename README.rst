@@ -201,4 +201,4 @@ Docker Commands::
 Running Tests::
 
     docker-compose -f docker-compose-tests.yml up --abort-on-container-exit
-    docker-compose -f docker-compose-tests.yml rm -fsv && docker rmi $(docker images '*x_test*' -a -q) && docker system prune
+    docker-compose -f docker-compose-tests.yml rm -fsv && docker images '*x_test*' -a -q | xargs -r docker rmi && docker system prune
