@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Any, Dict, Generic, List, Optional, Tuple, Type
 
-from src.app.infrastructure.repositories.base import AbstractBaseRepository, OuterGenericType
+from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType
 
 
 class AbstractBaseApplicationService(ABC):

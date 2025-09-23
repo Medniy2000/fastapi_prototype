@@ -92,7 +92,7 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         raise NotImplementedError
 
 
-class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
 
     __ATR_SEPARATOR: str = "__"
@@ -106,13 +106,9 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
         "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
         "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
-        "not_like_all": lambda stmt, key1, _, v: BaseSQLAsyncDrivenBaseRepository.__not_like_all(stmt, key1, v),
-        "jsonb_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_like(
-            stmt, key1, key_2, v
-        ),
-        "jsonb_not_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_not_like(
-            stmt, key1, key_2, v
-        ),
+        "not_like_all": lambda stmt, key1, _, v: BasePSQLRepository.__not_like_all(stmt, key1, v),
+        "jsonb_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_like(stmt, key1, key_2, v),
+        "jsonb_not_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_not_like(stmt, key1, key_2, v),
     }
 
     @staticmethod
