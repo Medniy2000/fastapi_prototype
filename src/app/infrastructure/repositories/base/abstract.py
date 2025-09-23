@@ -1,13 +1,8 @@
 from abc import ABC
-from copy import deepcopy
-import datetime as dt
-from dataclasses import dataclass, fields, make_dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, TypeVar
+from dataclasses import dataclass
+from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
-from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
-
-from src.app.infrastructure.utils.common import generate_str
-from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
+from src.app.infrastructure.extensions.psql_ext.psql_ext import Base
 
 
 class AbstractRepository(ABC):
@@ -90,5 +85,3 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         filter_data: dict,
     ) -> None:
         raise NotImplementedError
-
-

@@ -411,7 +411,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             return
 
         # Get all unique keys from all items
-        all_keys = set()
+        all_keys: set[str] = set()
         for item in items:
             all_keys.update(item.keys())
 
@@ -471,15 +471,11 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                 filter_data=filter_data,
                 data=data_tmp,
                 is_return_require=is_return_require,
-                out_dataclass=out_dataclass
+                out_dataclass=out_dataclass,
             )
             return item
         else:
-            item = await cls.create(
-                data=data,
-                is_return_require=is_return_require,
-                out_dataclass=out_dataclass
-            )
+            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
             return item
 
     @classmethod
@@ -495,4 +491,3 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         async with get_session() as session:
             await session.execute(stmt)
             await session.commit()
-
