@@ -286,6 +286,9 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
 
+        # Normalize data to handle mixed completeness
+        cls._normalize_bulk_data(items=items_copy)
+
         async with get_session(expire_on_commit=True) as session:
             model_class = cls.model()  # type: ignore
             model_table = model_class.__table__  # type: ignore
@@ -402,6 +405,34 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                     item["created_at"] = dt_
 
     @classmethod
+    def _normalize_bulk_data(cls, items: List[dict]) -> None:
+        """Normalize bulk data to handle mixed field completeness"""
+        if not items:
+            return
+
+        # Get all unique keys from all items
+        all_keys = set()
+        for item in items:
+            all_keys.update(item.keys())
+
+        # Get model column defaults and nullable info
+        model_class = cls.model()  # type: ignore
+        model_table = model_class.__table__  # type: ignore
+
+        # For each item, ensure it has all fields with appropriate defaults
+        for item in items:
+            for key in all_keys:
+                if key not in item:
+                    # Check if column exists in model
+                    if hasattr(model_class, key):
+                        column = getattr(model_table.c, key, None)
+                        if column is not None:
+                            # Only add explicit None if column is nullable and has no default
+                            if column.nullable and column.default is None and column.server_default is None:
+                                item[key] = None
+                            # Don't add anything for columns with defaults - let database handle it
+
+    @classmethod
     async def _bulk_update_with_returning(
         cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType]:
@@ -436,10 +467,19 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             data_tmp = deepcopy(data)
             data_tmp.pop("id", None)
             data_tmp.pop("uuid", None)
-            item = await cls.update(filter_data=filter_data, data=data_tmp, is_return_require=is_return_require)
+            item = await cls.update(
+                filter_data=filter_data,
+                data=data_tmp,
+                is_return_require=is_return_require,
+                out_dataclass=out_dataclass
+            )
             return item
         else:
-            item = await cls.create(data=data, is_return_require=is_return_require)
+            item = await cls.create(
+                data=data,
+                is_return_require=is_return_require,
+                out_dataclass=out_dataclass
+            )
             return item
 
     @classmethod
@@ -455,3 +495,4 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         async with get_session() as session:
             await session.execute(stmt)
             await session.commit()
+
