@@ -8,7 +8,7 @@ from src.app.infrastructure.messaging.clients.rabbitmq_client import RabbitQueue
 
 class MessageBrokerProtocol(Protocol):
 
-    is_healthy: bool
+    async def is_healthy(self) -> bool: ...
 
     async def produce_messages(self, **kwargs: Any) -> None: ...
 
@@ -34,8 +34,8 @@ class MQClientProxy:
         self._client = client_class(message_broker_url)
         self.message_broker_type = message_broker_type
 
-    def is_healthy(self) -> bool:
-        return self._client.is_healthy
+    async def is_healthy(self) -> bool:
+        return await self._client.is_healthy()
 
     async def produce_messages(
         self,

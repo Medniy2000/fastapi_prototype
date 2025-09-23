@@ -14,13 +14,14 @@ class KafkaClient:
     def __init__(self, message_broker_url: str) -> None:
         self.message_broker_url = message_broker_url
 
-    @property
     async def is_healthy(self) -> bool:
         client = AIOKafkaClient(bootstrap_servers=self.message_broker_url)
         try:
             await client.bootstrap()
             metadata = await client.fetch_all_metadata()
-            return len(metadata.brokers) > 0
+            # Check if brokers is a method or property
+            brokers = metadata.brokers() if callable(metadata.brokers) else metadata.brokers
+            return len(brokers) > 0
         except Exception as ex:
             logger.error(f"{ex}")
             return False
