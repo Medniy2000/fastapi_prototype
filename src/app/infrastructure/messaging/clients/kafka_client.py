@@ -2,7 +2,7 @@ import json
 import datetime as dt
 from typing import Callable, List
 from loguru import logger
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord, TopicPartition
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord, TopicPartition, AIOKafkaClient
 
 
 class KafkaClient:
@@ -13,6 +13,19 @@ class KafkaClient:
 
     def __init__(self, message_broker_url: str) -> None:
         self.message_broker_url = message_broker_url
+
+    @property
+    async def is_healthy(self) -> bool:
+        client = AIOKafkaClient(bootstrap_servers=self.message_broker_url)
+        try:
+            await client.bootstrap()
+            metadata = await client.fetch_all_metadata()
+            return len(metadata.brokers) > 0
+        except Exception as ex:
+            logger.error(f"{ex}")
+            return False
+        finally:
+            await client.close()
 
     async def produce_messages(self, topic: str, partition: int, messages: List[dict], **kwargs: dict) -> None:
         producer = AIOKafkaProducer(

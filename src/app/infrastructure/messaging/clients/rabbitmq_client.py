@@ -27,6 +27,16 @@ class RabbitQueueClientClient:
         self.__connection_pool: Pool = Pool(self.__get_connection, max_size=self.__connections_pool_max_size)
         self.__channel_pool: Pool = Pool(self.__get_channel, max_size=self.__channel_pool_max_size)
 
+    @property
+    async def is_healthy(self) -> bool:
+        try:
+            connection_ = await aio_pika.connect_robust(self.message_broker_url)
+            await connection_.close()
+            return True
+        except Exception as ex:
+            logger.error(f"{ex}")
+            return False
+
     async def __get_connection(self) -> AbstractRobustConnection:
         while True:
             try:
