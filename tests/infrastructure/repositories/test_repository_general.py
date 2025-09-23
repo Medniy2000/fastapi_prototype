@@ -10,110 +10,139 @@ from tests.fixtures.constants import USERS
 
 
 def test_users_get_list_limit_offset_case_1(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test pagination with limit larger than remaining items"""
     users_repository = repo_container.users_repository
 
-    count = len(USERS)
-    offset = count - 1
+    total_users = len(USERS)
+    offset = total_users - 1
     limit = 10
-    expected_count = 1  # noqa
+    expected_count = 1
 
     items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"limit": limit, "offset": offset}, out_dataclass=UserTestAggregate),
     )
-    assert isinstance(items, list) is True
+
+    assert isinstance(items, list)
     assert len(items) == expected_count
 
-    raw_ids = [i["id"] for i in USERS]
+    # Verify returned item is valid
+    expected_ids = {user["id"] for user in USERS}
     for user in items:
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id in raw_ids
+        assert isinstance(user, UserTestAggregate)
+        assert user.id in expected_ids
 
 
 def test_users_get_list_limit_offset_case_2(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test pagination with offset near end of dataset"""
     users_repository = repo_container.users_repository
 
-    count = len(USERS)
-    offset = count - 2
+    total_users = len(USERS)
+    offset = total_users - 2
     limit = 10
     expected_count = 2
 
-    items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(  # noqa
+    items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"limit": limit, "offset": offset}, out_dataclass=UserTestAggregate)
     )
-    assert isinstance(items, list) is True
+
+    assert isinstance(items, list)
     assert len(items) == expected_count
 
-    raw_ids = [i["id"] for i in USERS]
+    expected_ids = {user["id"] for user in USERS}
     for user in items:
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id in raw_ids
+        assert isinstance(user, UserTestAggregate)
+        assert user.id in expected_ids
 
 
 def test_users_get_list_limit_offset_case_3(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test pagination with small limit and large offset"""
     users_repository = repo_container.users_repository
-    count = len(USERS)
-    offset = count - 2
+
+    total_users = len(USERS)
+    offset = total_users - 2
     limit = 1
-    expected_count = 1  # noqa
+    expected_count = 1
+
     items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"limit": limit, "offset": offset}, out_dataclass=UserTestAggregate)
     )
-    assert isinstance(items, list) is True
+
+    assert isinstance(items, list)
     assert len(items) == expected_count
 
-    raw_ids = [i["id"] for i in USERS]
+    expected_ids = {user["id"] for user in USERS}
     for user in items:
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id in raw_ids
+        assert isinstance(user, UserTestAggregate)
+        assert user.id in expected_ids
 
 
-def test_users_get_list_limit_offset_case_4(e_loop: AbstractEventLoop, users: Any) -> None:
+def test_users_get_list_with_offset_only(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test pagination with offset but no limit"""
     users_repository = repo_container.users_repository
-    count = len(USERS)
+
+    total_users = len(USERS)
     offset = 1
-    expected_count = count - offset
+    expected_count = total_users - offset
+
     items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(filter_data={"offset": offset}, out_dataclass=UserTestAggregate)
     )
-    assert isinstance(items, list) is True
+
+    assert isinstance(items, list)
     assert len(items) == expected_count
 
-    raw_ids = [i["id"] for i in USERS]
+    expected_ids = {user["id"] for user in USERS}
     for user in items:
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id in raw_ids
+        assert isinstance(user, UserTestAggregate)
+        assert user.id in expected_ids
 
 
 def test_users_get_list_order_by_id_asc(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test ordering users by ID in ascending order"""
     users_repository = repo_container.users_repository
-    USERS_RAW = sorted(USERS, key=lambda i: i["id"])
-    count = len(USERS_RAW)
+
+    users_sorted = sorted(USERS, key=lambda i: i["id"])
+    expected_count = len(users_sorted)
 
     items: List[UserTestAggregate] = e_loop.run_until_complete(
         users_repository.get_list(order_data=("id",), out_dataclass=UserTestAggregate)
     )
-    assert isinstance(items, list) is True
-    assert len(items) == count
 
+    assert isinstance(items, list)
+    assert len(items) == expected_count
+
+    # Verify ordering is correct
     for index, user in enumerate(items):
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id == USERS_RAW[index]["id"]
+        assert isinstance(user, UserTestAggregate)
+        assert user.id == users_sorted[index]["id"]
+
+    # Verify items are in ascending order
+    user_ids = [user.id for user in items]
+    assert user_ids == sorted(user_ids)
 
 
 def test_users_get_list_order_by_id_desc(e_loop: AbstractEventLoop, users: Any) -> None:
+    """Test ordering users by ID in descending order"""
     users_repository = repo_container.users_repository
-    USERS_RAW = sorted(USERS, key=lambda i: i["id"], reverse=True)
-    count = len(USERS_RAW)
+
+    users_sorted = sorted(USERS, key=lambda i: i["id"], reverse=True)
+    expected_count = len(users_sorted)
 
     items: List[Type[UserTestAggregate]] = e_loop.run_until_complete(
         users_repository.get_list(order_data=("-id",), out_dataclass=UserTestAggregate)
     )
-    assert isinstance(items, list) is True
-    assert len(items) == count
 
+    assert isinstance(items, list)
+    assert len(items) == expected_count
+
+    # Verify ordering is correct
     for index, user in enumerate(items):
-        assert isinstance(user, UserTestAggregate) is True
-        assert user.id == USERS_RAW[index]["id"]
+        assert isinstance(user, UserTestAggregate)
+        assert user.id == users_sorted[index]["id"]
+
+    # Verify items are in descending order
+    user_ids = [user.id for user in items]
+    assert user_ids == sorted(user_ids, reverse=True)
 
 
 USERS_IN_LOOKUP = [

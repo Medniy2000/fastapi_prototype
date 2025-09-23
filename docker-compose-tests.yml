@@ -14,6 +14,7 @@ services:
       - x_test_redis_service
       - x_test_rabbit_mq_service
       - x_test_psql_db_service
+      - x_test_kafka_service
 
   x_test_psql_db_service:
     image: postgres:latest
@@ -31,6 +32,11 @@ services:
     env_file:
       - ./.launch/tests/.test_env
 
+  x_test_redis_service:
+    image: redis:latest
+    ports:
+      - "6382:6379"
+
   x_test_rabbit_mq_service:
     image: rabbitmq:3.11.6-management
     ports:
@@ -39,7 +45,30 @@ services:
       RABBITMQ_DEFAULT_USER: dev
       RABBITMQ_DEFAULT_PASS: dev
 
-  x_test_redis_service:
-    image: redis:latest
+  x_test_kafka_service:
+    image: confluentinc/cp-kafka:7.4.0
     ports:
-      - "6382:6379"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: x_test_zookeeper_service:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://x_test_kafka_service:29092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    depends_on:
+      - x_test_zookeeper_service
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9094", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  x_test_zookeeper_service:
+    image: confluentinc/cp-zookeeper:latest
+    ports:
+      - "2183:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
