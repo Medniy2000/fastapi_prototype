@@ -1,98 +1,16 @@
-from abc import ABC
-from copy import deepcopy
 import datetime as dt
-from dataclasses import dataclass, fields, make_dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type, TypeVar
+from copy import deepcopy
+from dataclasses import fields, make_dataclass
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
 from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
 
-from src.app.infrastructure.utils.common import generate_str
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
+from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel
+from src.app.infrastructure.utils.common import generate_str
 
 
-class AbstractRepository(ABC):
-    pass
-
-
-@dataclass
-class BaseOutputEntity(ABC):
-    pass
-
-
-BaseModel = TypeVar("BaseModel", bound=Base)
-OuterGenericType = TypeVar("OuterGenericType", bound=BaseOutputEntity)
-
-
-class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
-    MODEL: Optional[Type[Base]] = None
-
-    @classmethod
-    async def count(cls, filter_data: dict) -> int:
-        raise NotImplementedError
-
-    @classmethod
-    async def is_exists(cls, filter_data: dict) -> bool:
-        raise NotImplementedError
-
-    @classmethod
-    async def get_first(
-        cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def get_list(
-        cls, filter_data: dict, order_data: Tuple[str] = ("id",), out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType]:
-        raise NotImplementedError
-
-    @classmethod
-    async def create(
-        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def update(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def update_or_create(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        raise NotImplementedError
-
-    @classmethod
-    async def remove(
-        cls,
-        filter_data: dict,
-    ) -> None:
-        raise NotImplementedError
-
-
-class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
     MODEL: Optional[Type[Base]] = None
 
     __ATR_SEPARATOR: str = "__"
@@ -106,13 +24,9 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
         "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
         "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
-        "not_like_all": lambda stmt, key1, _, v: BaseSQLAsyncDrivenBaseRepository.__not_like_all(stmt, key1, v),
-        "jsonb_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_like(
-            stmt, key1, key_2, v
-        ),
-        "jsonb_not_like": lambda stmt, key1, key_2, v: BaseSQLAsyncDrivenBaseRepository.__jsonb_not_like(
-            stmt, key1, key_2, v
-        ),
+        "not_like_all": lambda stmt, key1, _, v: BasePSQLRepository.__not_like_all(stmt, key1, v),
+        "jsonb_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_like(stmt, key1, key_2, v),
+        "jsonb_not_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_not_like(stmt, key1, key_2, v),
     }
 
     @staticmethod
@@ -372,6 +286,9 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
 
+        # Normalize data to handle mixed completeness
+        cls._normalize_bulk_data(items=items_copy)
+
         async with get_session(expire_on_commit=True) as session:
             model_class = cls.model()  # type: ignore
             model_table = model_class.__table__  # type: ignore
@@ -488,6 +405,34 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
                     item["created_at"] = dt_
 
     @classmethod
+    def _normalize_bulk_data(cls, items: List[dict]) -> None:
+        """Normalize bulk data to handle mixed field completeness"""
+        if not items:
+            return
+
+        # Get all unique keys from all items
+        all_keys: set[str] = set()
+        for item in items:
+            all_keys.update(item.keys())
+
+        # Get model column defaults and nullable info
+        model_class = cls.model()  # type: ignore
+        model_table = model_class.__table__  # type: ignore
+
+        # For each item, ensure it has all fields with appropriate defaults
+        for item in items:
+            for key in all_keys:
+                if key not in item:
+                    # Check if column exists in model
+                    if hasattr(model_class, key):
+                        column = getattr(model_table.c, key, None)
+                        if column is not None:
+                            # Only add explicit None if column is nullable and has no default
+                            if column.nullable and column.default is None and column.server_default is None:
+                                item[key] = None
+                            # Don't add anything for columns with defaults - let database handle it
+
+    @classmethod
     async def _bulk_update_with_returning(
         cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType]:
@@ -522,10 +467,15 @@ class BaseSQLAsyncDrivenBaseRepository(AbstractBaseRepository[OuterGenericType],
             data_tmp = deepcopy(data)
             data_tmp.pop("id", None)
             data_tmp.pop("uuid", None)
-            item = await cls.update(filter_data=filter_data, data=data_tmp, is_return_require=is_return_require)
+            item = await cls.update(
+                filter_data=filter_data,
+                data=data_tmp,
+                is_return_require=is_return_require,
+                out_dataclass=out_dataclass,
+            )
             return item
         else:
-            item = await cls.create(data=data, is_return_require=is_return_require)
+            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
             return item
 
     @classmethod

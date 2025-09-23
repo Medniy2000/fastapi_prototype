@@ -111,7 +111,7 @@ Running the App locally::
     celery -A src.app.interfaces.cli.celery_app worker -l INFO -E -B -Q default_queue --concurrency=2 -n default@%h
 
     # run Consumer
-    python -m src.app.consume
+    python -m src.app.interfaces.cli.consume
 
     # run gRPC server
     python -m src.app.interfaces.grpc.server

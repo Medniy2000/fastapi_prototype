@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Dict
 
 from fastapi import APIRouter, Body, Request
 
@@ -36,3 +36,10 @@ async def send_message(
     await mq_client.produce_messages(
         messages=[request_body], queue_name=settings.DEFAULT_QUEUE, exchanger_name=settings.DEFAULT_EXCHANGER or ""
     )
+
+
+@router.get("/health-check/", status_code=200)
+async def health_check(
+    request: Request,
+) -> Dict[str, str]:
+    return {"status": "ok"}
