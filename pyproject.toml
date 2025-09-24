@@ -31,6 +31,8 @@ aiokafka = "^0.12.0"
 pytz = "^2025.2"
 grpcio = "^1.69.0"
 grpcio-tools = "^1.69.0"
+greenlet = "^3.2.4"
+
 
 
 [tool.poetry.group.dev.dependencies]

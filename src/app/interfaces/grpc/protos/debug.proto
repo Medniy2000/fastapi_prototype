@@ -22,6 +22,17 @@ message MessageResp {
   string message = 2;
 }
 
+
+message HealthCheckReq {
+}
+
+message HealthCheckResp {
+  string status = 1;
+}
+
+
 service DebugService {
   rpc SendMessage(MessageReq) returns (MessageResp) {}
+
+  rpc HealthCheck(HealthCheckReq) returns (HealthCheckResp) {}
 }

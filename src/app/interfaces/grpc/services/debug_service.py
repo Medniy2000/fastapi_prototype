@@ -8,6 +8,7 @@ from src.app.interfaces.grpc.pb.debug import debug_pb2 as pb2
 from google.protobuf.json_format import MessageToJson
 
 from src.app.interfaces.grpc.pb.debug.debug_pb2_grpc import DebugServiceServicer
+from src.app.application.container import container as services_container
 
 
 class DebugService(DebugServiceServicer):
@@ -23,3 +24,8 @@ class DebugService(DebugServiceServicer):
         )
         logger.debug(f"Sent message `{event}` with data {str(data)}")
         return pb2.MessageResp(status=True, message="OK")  # type: ignore
+
+    async def HealthCheck(self, request, context) -> pb2.HealthCheckResp:  # type: ignore
+        is_healthy = await services_container.common_service.is_healthy()
+        status = "OK" if is_healthy else "NOT OK"
+        return pb2.HealthCheckResp(status=status)  # type: ignore
