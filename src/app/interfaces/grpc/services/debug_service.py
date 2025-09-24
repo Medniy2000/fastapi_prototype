@@ -23,3 +23,6 @@ class DebugService(DebugServiceServicer):
         )
         logger.debug(f"Sent message `{event}` with data {str(data)}")
         return pb2.MessageResp(status=True, message="OK")  # type: ignore
+
+    async def HealthCheck(self, request, context) -> pb2.HealthCheckResp:  # type: ignore
+        return pb2.HealthCheckResp(status="OK")  # type: ignore
