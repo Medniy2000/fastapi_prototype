@@ -3,6 +3,7 @@ from src.app.infrastructure.repositories.container import container as repo_cont
 from src.app.application.common.services.base import AbstractBaseApplicationService
 from loguru import logger
 
+
 class CommonApplicationService(AbstractBaseApplicationService):
 
     @classmethod

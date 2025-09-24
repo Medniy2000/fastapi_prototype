@@ -1,5 +1,3 @@
-import json
-
 from src.app.infrastructure.extensions.redis_ext.redis_ext import redis_client
 from src.app.infrastructure.repositories.base.base_redis_repository import BaseRedisRepository
 

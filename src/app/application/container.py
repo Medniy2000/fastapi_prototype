@@ -20,6 +20,7 @@ class ApplicationServicesContainer:
     @property
     def common_service(self) -> Type["src.app.application.services.common_service.CommonApplicationService"]:
         from src.app.application.services.common_service import CommonApplicationService
+
         return CommonApplicationService
 
 
