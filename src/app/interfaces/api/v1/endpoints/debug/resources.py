@@ -1,7 +1,7 @@
 from typing import Annotated, Dict
 
 from fastapi import APIRouter, Body, Request
-
+from src.app.application.container import container as services_container
 from src.app.interfaces.api.v1.endpoints.debug.schemas.req_schemas import MessageReq
 from src.app.config.settings import settings
 from src.app.infrastructure.messaging.mq_client import mq_client
@@ -42,4 +42,6 @@ async def send_message(
 async def health_check(
     request: Request,
 ) -> Dict[str, str]:
-    return {"status": "ok"}
+    is_healthy = await services_container.common_service.is_healthy()
+    status = "OK" if is_healthy else "NOT OK"
+    return {"status": status}
