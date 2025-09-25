@@ -3,40 +3,121 @@ from copy import deepcopy
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
-from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
+from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update, Column, column, \
+    JSON, DateTime, Boolean, Float, Integer
 
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
-from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel
+from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel, \
+    RepositoryError
 from src.app.infrastructure.utils.common import generate_str
 
 
-class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
-    MODEL: Optional[Type[Base]] = None
-
-    __ATR_SEPARATOR: str = "__"
+class PSQLLookupRegistry:
     LOOKUP_MAP = {
-        "gt": lambda stmt, key1, _, v: stmt.where(key1 > v),
-        "gte": lambda stmt, key1, _, v: stmt.where(key1 >= v),
-        "lt": lambda stmt, key1, _, v: stmt.where(key1 < v),
-        "lte": lambda stmt, key1, _, v: stmt.where(key1 <= v),
-        "e": lambda stmt, key1, _, v: stmt.where(key1 == v),
-        "ne": lambda stmt, key1, _, v: stmt.where(key1 != v),
-        "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
-        "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
-        "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
-        "not_like_all": lambda stmt, key1, _, v: BasePSQLRepository.__not_like_all(stmt, key1, v),
-        "jsonb_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_like(stmt, key1, key_2, v),
-        "jsonb_not_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_not_like(stmt, key1, key_2, v),
+        "gt": lambda stmt, key1, _, v: PSQLLookupRegistry._greater_than(stmt, key1, v),
+        "gte": lambda stmt, key1, _, v: PSQLLookupRegistry._greater_than_equal(stmt, key1, v),
+        "lt": lambda stmt, key1, _, v: PSQLLookupRegistry._less_than(stmt, key1, v),
+        "lte": lambda stmt, key1, _, v: PSQLLookupRegistry._less_than_equal(stmt, key1, v),
+        "e": lambda stmt, key1, _, v: PSQLLookupRegistry._equal(stmt, key1, v),
+        "ne": lambda stmt, key1, _, v: PSQLLookupRegistry._not_equal(stmt, key1, v),
+        "in": lambda stmt, key1, _, v: PSQLLookupRegistry._in(stmt, key1, v),  # does not work with None
+        "not_in": lambda stmt, key1, _, v: PSQLLookupRegistry._not_in(stmt, key1, v),  # does not work with None
+        "ilike": lambda stmt, key1, _, v: PSQLLookupRegistry._ilike(stmt, key1, v),
+        "like": lambda stmt, key1, _, v: PSQLLookupRegistry._like(stmt, key1, v),
+        "not_like_all": lambda stmt, key1, _, v: PSQLLookupRegistry._not_like_all(stmt, key1, v),
+        "jsonb_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_like(stmt, key1, key_2, v),
+        "jsonb_not_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_not_like(stmt, key1, key_2, v),
     }
+    _JSONB_LOOKUPS = ("jsonb_like", "jsonb_not_like", )
+
+
+    @classmethod
+    def get_operation(cls, name: str) -> Callable:
+        """Get lookup operation by name"""
+        operation = cls.LOOKUP_MAP.get(name, None)
+        if not operation:
+            raise RepositoryError(
+                f"Unknown lookup operation: '{name}'. Available: {list(cls.LOOKUP_MAP.keys())}"
+            )
+        return operation
+
+    @classmethod
+    def apply_lookup(cls, stmt: Any, column: Any, lookup: str, value: Any, jsonb_field: str = None) -> Any:
+        """Apply lookup operation to statement"""
+        operation = cls.get_operation(lookup)
+
+        if lookup in cls._JSONB_LOOKUPS:
+            return operation(stmt, column, jsonb_field, value)
+        else:
+            return operation(stmt, column, jsonb_field, value)
+
+    # Core lookup operations
+    @staticmethod
+    def _equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Equal comparison: column = value"""
+        return stmt.where(column == value)
 
     @staticmethod
-    def __not_like_all(stmt: Any, k: Any, v: Any) -> Select:
-        for item in v:
-            stmt = stmt.filter(k.cast(String).like(f"%{str(item)}%"))
+    def _not_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Not equal comparison: column != value"""
+        return stmt.where(column != value)
+
+    @staticmethod
+    def _greater_than(stmt: Any, column: Any, value: Any) -> Any:
+        """Greater than comparison: column > value"""
+        return stmt.where(column > value)
+
+    @staticmethod
+    def _greater_than_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Greater than or equal comparison: column >= value"""
+        return stmt.where(column >= value)
+
+    @staticmethod
+    def _less_than(stmt: Any, column: Any, value: Any) -> Any:
+        """Less than comparison: column < value"""
+        return stmt.where(column < value)
+
+    @staticmethod
+    def _less_than_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Less than or equal comparison: column <= value"""
+        return stmt.where(column <= value)
+
+    @staticmethod
+    def _in(stmt: Any, column: Any, value: List[Any]) -> Any:
+        """IN comparison: column IN (values)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("IN lookup requires list or tuple value")
+        return stmt.where(column.in_(value))
+
+    @staticmethod
+    def _not_in(stmt: Any, column: Any, value: List[Any]) -> Any:
+        """NOT IN comparison: column NOT IN (values)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("NOT_IN lookup requires list or tuple value")
+        return stmt.where(column.not_in(value))
+
+    @staticmethod
+    def _like(stmt: Any, column: Any, value: Any) -> Any:
+        """LIKE comparison: column LIKE %value%"""
+        return stmt.filter(column.cast(String).like(f"%{str(value)}%"))
+
+    @staticmethod
+    def _ilike(stmt: Any, column: Any, value: Any) -> Any:
+        """LIKE comparison: column LIKE %value%"""
+        return stmt.filter(column.cast(String).ilike(f"%{str(value)}%"))
+
+    @staticmethod
+    def _not_like_all(stmt: Any, column: Any, value: List[str]) -> Select:
+        """NOT LIKE ALL: column NOT LIKE ALL values (all values must not match)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("NOT_LIKE_ALL lookup requires list or tuple value")
+
+        for item in value:
+            stmt = stmt.filter(column.cast(String).like(f"%{str(item)}%"))
         return stmt
 
     @staticmethod
-    def __jsonb_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
+    def _jsonb_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
         if not key_2:
             return stmt.where(key_1.cast(String).like(f"%{v}%"))
         else:
@@ -46,7 +127,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             )
 
     @staticmethod
-    def __jsonb_not_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
+    def _jsonb_not_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
         if not key_2:
             return stmt.where(~key_1.cast(String).like(f"%{v}%"))
         else:
@@ -56,6 +137,95 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                     **{key_: str(v)}
                 )
             )
+
+
+class QueryBuilder:
+    LOOKUP_REGISTRY_CLASS = PSQLLookupRegistry
+
+    __ATR_SEPARATOR: str = "__"
+    PAGINATION_KEYS = ["limit", "offset"]
+
+    @classmethod
+    def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
+        return cls.LOOKUP_REGISTRY_CLASS
+
+    # TODO: cache this method
+    @classmethod
+    def _get_model_columns(cls, model_class: Type[Base]) -> Dict[str, Column]:
+        """Get all columns from the model"""
+        inspector = inspect(model_class)
+        return {col.name: col for col in inspector.columns}
+
+    @classmethod
+    def validate_filter_value(cls, column: Column, key, value:Any, lookup: str) -> None:
+        """Validate filter data before building query"""
+        # Handle None values
+        if value is None and not column.nullable:
+            raise RepositoryError(f"Column '{key}' cannot be None (not nullable)")
+
+        if value is None:
+            return  # None is valid for nullable columns
+
+        column_type = column.type
+
+        # For list-based lookups, validate each item
+        if lookup in ('in', 'not_in') and isinstance(value, (list, tuple)):
+            for item in value:
+                if item is not None:
+                    cls._validate_single_value_type(key, item, column_type)
+            return
+
+        # For operations that convert to string, be more lenient
+        if lookup in ('not_like_all', 'like', 'jsonb_like', 'jsonb_not_like'):
+            if lookup == 'not_like_all':
+                if not isinstance(value, (list, tuple)):
+                    raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
+            # These operations convert values to strings, so accept any convertible type
+            return
+
+        cls._validate_single_value_type(key, value, column_type)
+
+    @classmethod
+    def _validate_single_value_type(cls, key: str, value: Any, column_type: Any) -> None:
+        """Validate a single value against column type"""
+        # String types (including TEXT, VARCHAR, etc.)
+        if isinstance(column_type, String):
+            if not isinstance(value, str):
+                raise RepositoryError(f"Column '{key}' expects string value, got {type(value).__name__}")
+
+        # Integer types
+        elif isinstance(column_type, Integer):
+            if not isinstance(value, int):
+                raise RepositoryError(f"Column '{key}' expects integer value, got {type(value).__name__}")
+
+        # Float types
+        elif isinstance(column_type, Float):
+            if not isinstance(value, (int, float)):
+                raise RepositoryError(f"Column '{key}' expects numeric value, got {type(value).__name__}")
+
+        # Boolean types
+        elif isinstance(column_type, Boolean):
+            if not isinstance(value, bool):
+                raise RepositoryError(f"Column '{key}' expects boolean value, got {type(value).__name__}")
+
+        # DateTime types
+        elif isinstance(column_type, DateTime):
+            from datetime import datetime
+            if not isinstance(value, datetime):
+                raise RepositoryError(f"Column '{key}' expects datetime value, got {type(value).__name__}")
+
+        # JSON/JSONB types
+        elif isinstance(column_type, JSON):
+            # JSON can accept various types, so we're more lenient
+            if not isinstance(value, (dict, list, str, int, float, bool)):
+                raise RepositoryError(f"Column '{key}' expects JSON-compatible value, got {type(value).__name__}")
+
+    @classmethod
+    def validate_model_key(cls, key: str, model_class:Type[Base]) -> Column:
+        column_ = cls._get_model_columns(model_class).get(key, None)
+        if column_ is None:
+            raise RepositoryError(f"Column '{key}' does not exist in model {model_class.__name__}")
+        return column_
 
     @classmethod
     def _parse_filter_key(cls, key: str) -> Tuple[str, str, str]:  # type: ignore
@@ -77,48 +247,116 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             return key_1, key_2, lookup
 
     @classmethod
-    def _parse_order_data(cls, order_data: Optional[Tuple[str]] = None) -> tuple:
-        if not order_data:
-            order_data = ()  # type: ignore
-        parsed_order_data = []
+    def apply_where(
+            cls,
+            stmt: Any,
+            filter_data: Optional[Dict[str, Any]],
+            model_class: Type[Base]
+    ) -> Any:
+        if not filter_data:
+            return stmt
 
-        for order_item in order_data:  # type: ignore
-            order_item_tmp = order_item
-            if order_item_tmp.startswith("-"):
-                order_item_tmp = order_item[1:]
-                parsed_order_data.append(getattr(cls.model(), order_item_tmp).desc())
-            else:
-                parsed_order_data.append(getattr(cls.model(), order_item_tmp).asc())
-
-        return tuple(parsed_order_data)
-
-    @classmethod
-    def _parse_order_data_for_target(cls, target: Base, order_data: Optional[Tuple[str]] = None) -> tuple:
-        if not order_data:
-            order_data = ()  # type: ignore
-        parsed_order_data = []
-
-        for order_item in order_data:  # type: ignore
-            order_item_tmp = order_item
-            if order_item_tmp.startswith("-"):
-                order_item_tmp = order_item[1:]
-                parsed_order_data.append(getattr(target, order_item_tmp).desc())
-            else:
-                parsed_order_data.append(getattr(target, order_item_tmp).asc())
-
-        return tuple(parsed_order_data)
-
-    @classmethod
-    def _apply_where(cls, stmt: Any, filter_data: dict) -> Any:
         for key, value in filter_data.items():
-            key_1, key_2, lookup = cls._parse_filter_key(key)
-            key_1_ = getattr(cls.model(), key_1, None)
-            key_2_ = key_2
-            if "jsonb" in lookup and key_2:
-                key_1_ = key_1
-                key_2_ = key_2
-            stmt = cls.LOOKUP_MAP[lookup](stmt, key_1_, key_2_, value)
+            if key in cls.PAGINATION_KEYS:
+                continue
+            c_name, c_jsonb_name, lookup = cls._parse_filter_key(key)
+
+            column_ = cls.validate_model_key(c_name, model_class)
+            cls.validate_filter_value(column_, key, value, lookup)
+
+            stmt = cls.lookup_registry().apply_lookup(
+                stmt=stmt,
+                column=column_,
+                lookup=lookup,
+                value=value,
+                jsonb_field=c_jsonb_name
+            )
         return stmt
+
+    @classmethod
+    def apply_ordering(
+            cls,
+            stmt: Any,
+            order_data: Optional[Tuple[str, ...]],
+            model_class:Type[Base]
+    ) -> Any:
+        """Apply ORDER BY clause to statement"""
+        if not order_data:
+            return stmt
+
+        try:
+            parsed_order = cls._parse_order_data(order_data, model_class)
+            return stmt.order_by(*parsed_order)
+        except Exception as e:
+            raise RepositoryError(f"Failed to apply ordering: {str(e)}")
+
+    @classmethod
+    def apply_pagination(cls, stmt: Any, filter_data: Optional[Dict[str, Any]] = None) -> Any:
+        """Apply LIMIT and OFFSET to statement"""
+        if not filter_data:
+            return stmt
+
+        # Extract pagination parameters
+        limit = filter_data.get("limit")
+        offset = filter_data.get("offset", 0)
+
+        # Apply offset
+        if offset:
+            if not isinstance(offset, int) or offset < 0:
+                raise RepositoryError(f"Offset must be non-negative integer, got: {offset}")
+            stmt = stmt.offset(offset)
+
+        # Apply limit
+        if limit is not None:
+            if not isinstance(limit, int) or limit <= 0:
+                raise RepositoryError(f"Limit must be positive integer, got: {limit}")
+            stmt = stmt.limit(limit)
+
+        return stmt
+
+    @classmethod
+    def _parse_order_data(
+        cls,
+        order_data: Tuple[str, ...],
+        model_class: Type[Base]
+    ) -> List[Any]:
+        """Parse order data into SQLAlchemy order clauses"""
+        parsed_order = []
+
+        for order_item in order_data:
+            if not isinstance(order_item, str):
+                raise RepositoryError(f"Order field must be string, got: {type(order_item).__name__}")
+
+            # Handle descending order (prefix with -)
+            if order_item.startswith("-"):
+                field_name = order_item[1:]
+                direction = "desc"
+            else:
+                field_name = order_item
+                direction = "asc"
+
+            # Validate field exists in model
+            try:
+                column_ = cls.validate_model_key(field_name, model_class)
+                parsed_order.append(getattr(column_, direction)())
+            except Exception as e:
+                raise RepositoryError(f"Invalid order field '{field_name}': {str(e)}")
+
+        return parsed_order
+
+
+
+
+
+class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+    MODEL: Optional[Type[Base]] = None
+    _QUERY_BUILDER_CLASS: Type[QueryBuilder] = QueryBuilder
+
+    @classmethod
+    def query_builder(cls) -> Type[QueryBuilder]:
+        if not cls._QUERY_BUILDER_CLASS:
+            raise AttributeError
+        return cls._QUERY_BUILDER_CLASS
 
     @classmethod
     def model(cls) -> Type[BaseModel]:
@@ -160,11 +398,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             filter_data = {}
 
         filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
 
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data_,
+            model_class=cls.model()
+        )
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -174,11 +414,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def is_exists(cls, filter_data: dict) -> bool:
 
         filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
 
         stmt = select(exists(cls.model()))
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data_,
+            model_class=cls.model()
+        )
 
         async with get_session() as session:
             result = await session.execute(stmt)
@@ -190,11 +432,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
         filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
 
         stmt: Select = select(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data_,
+            model_class=cls.model()
+        )
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -215,15 +459,23 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     ) -> List[OuterGenericType]:
         if not filter_data:
             filter_data = {}
-        limit = filter_data.pop("limit", None)
-        offset = filter_data.pop("offset", 0)
+        filter_data_ = deepcopy(filter_data)
 
         stmt: Select = select(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
-        stmt = stmt.order_by(*cls._parse_order_data(order_data))
-        stmt = stmt.offset(offset)
-        if limit is not None:
-            stmt = stmt.limit(limit)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data_,
+            model_class=cls.model()
+        )
+        stmt = cls.query_builder().apply_ordering(
+            stmt,
+            order_data=order_data,
+            model_class=cls.model()
+        )
+        stmt = cls.query_builder().apply_pagination(
+            stmt,
+            filter_data=filter_data_
+        )
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -324,7 +576,11 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         data_copy = deepcopy(data)
 
         stmt = update(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data,
+            model_class=cls.model()
+        )
 
         cls._set_timestamps_on_update(items=[data_copy])
 
@@ -486,7 +742,11 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         if not filter_data:
             filter_data = {}
         stmt = delete(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
+        stmt = cls.query_builder().apply_where(
+            stmt,
+            filter_data=filter_data,
+            model_class=cls.model()
+        )
 
         async with get_session() as session:
             await session.execute(stmt)

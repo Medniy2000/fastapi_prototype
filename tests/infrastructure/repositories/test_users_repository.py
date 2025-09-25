@@ -6,7 +6,7 @@ from typing import Any, List, Type
 
 import pytest
 
-
+from src.app.infrastructure.repositories.base.abstract import RepositoryError
 from src.app.infrastructure.utils.common import generate_str
 from src.app.infrastructure.repositories.container import container as repo_container
 from tests.domain.users.aggregates.common import UserTestAggregate
@@ -886,11 +886,11 @@ def test_get_list_with_large_limit(e_loop: AbstractEventLoop, users: Any) -> Non
 def test_get_list_with_zero_limit(e_loop: AbstractEventLoop, users: Any) -> None:
     users_repository = repo_container.users_repository
 
-    items = e_loop.run_until_complete(
-        users_repository.get_list(filter_data={"limit": 0}, out_dataclass=UserTestAggregate)
-    )
+    with pytest.raises(RepositoryError):
+        e_loop.run_until_complete(
+            users_repository.get_list(filter_data={"limit": 0}, out_dataclass=UserTestAggregate)
+        )
 
-    assert len(items) == 0
 
 
 def test_get_list_with_large_offset(e_loop: AbstractEventLoop, users: Any) -> None:
