@@ -3,12 +3,32 @@ from copy import deepcopy
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
-from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update, Column, JSON, \
-    DateTime, Boolean, Float, Integer
+from sqlalchemy import (
+    delete,
+    exists,
+    func,
+    insert,
+    inspect,
+    select,
+    Select,
+    String,
+    text,
+    update,
+    Column,
+    JSON,
+    DateTime,
+    Boolean,
+    Float,
+    Integer,
+)
 
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
-from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel, \
-    RepositoryError
+from src.app.infrastructure.repositories.base.abstract import (
+    AbstractBaseRepository,
+    OuterGenericType,
+    BaseModel,
+    RepositoryError,
+)
 from src.app.infrastructure.utils.common import generate_str
 
 
@@ -28,21 +48,23 @@ class PSQLLookupRegistry:
         "jsonb_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_like(stmt, key1, key_2, v),
         "jsonb_not_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_not_like(stmt, key1, key_2, v),
     }
-    _JSONB_LOOKUPS = ("jsonb_like", "jsonb_not_like", )
-
+    _JSONB_LOOKUPS = (
+        "jsonb_like",
+        "jsonb_not_like",
+    )
 
     @classmethod
     def get_operation(cls, name: str) -> Callable:
         """Get lookup operation by name"""
         operation = cls.LOOKUP_MAP.get(name, None)
         if not operation:
-            raise RepositoryError(
-                f"Unknown lookup operation: '{name}'. Available: {list(cls.LOOKUP_MAP.keys())}"
-            )
+            raise RepositoryError(f"Unknown lookup operation: '{name}'. Available: {list(cls.LOOKUP_MAP.keys())}")
         return operation
 
     @classmethod
-    def apply_lookup(cls, stmt: Any, column: Any, lookup: str, value: Any, jsonb_field: str = None) -> Any:
+    def apply_lookup(
+        cls, stmt: Any, column: Any, lookup: str, value: Any, jsonb_field: Optional[str] = None
+    ) -> Any:
         """Apply lookup operation to statement"""
         operation = cls.get_operation(lookup)
 
@@ -162,71 +184,112 @@ class QueryBuilder:
         return cls._MODEL_COLUMNS_CACHE[model_name]
 
     @classmethod
-    def validate_filter_value(cls, column: Column, key, value:Any, lookup: str) -> None:
+    def validate_filter_value(cls, column: Column, key: str, value: Any, lookup: str) -> None:
         """Validate filter data before building query"""
-        # Handle None values
-        if value is None and not column.nullable:
+        if cls._is_none_value_invalid(column, value):
             raise RepositoryError(f"Column '{key}' cannot be None (not nullable)")
 
         if value is None:
             return  # None is valid for nullable columns
 
-        column_type = column.type
-
-        # For list-based lookups, validate each item
-        if lookup in ('in', 'not_in') and isinstance(value, (list, tuple)):
-            for item in value:
-                if item is not None:
-                    cls._validate_single_value_type(key, item, column_type)
+        if cls._is_list_based_lookup(lookup):
+            cls._validate_list_lookup_values(key, value, column.type)
             return
 
-        # For operations that convert to string, be more lenient
-        if lookup in ('not_like_all', 'like', 'jsonb_like', 'jsonb_not_like'):
-            if lookup == 'not_like_all':
-                if not isinstance(value, (list, tuple)):
-                    raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
-            # These operations convert values to strings, so accept any convertible type
+        if cls._is_string_convertible_lookup(lookup):
+            cls._validate_string_convertible_lookup(key, value, lookup)
             return
 
-        cls._validate_single_value_type(key, value, column_type)
+        cls._validate_single_value_type(key, value, column.type)
+
+    @classmethod
+    def _is_none_value_invalid(cls, column: Column, value: Any) -> bool:
+        """Check if None value is invalid for the column"""
+        return value is None and not column.nullable
+
+    @classmethod
+    def _is_list_based_lookup(cls, lookup: str) -> bool:
+        """Check if lookup requires list/tuple values"""
+        return lookup in ("in", "not_in")
+
+    @classmethod
+    def _is_string_convertible_lookup(cls, lookup: str) -> bool:
+        """Check if lookup converts values to strings"""
+        return lookup in ("not_like_all", "like", "jsonb_like", "jsonb_not_like")
+
+    @classmethod
+    def _validate_list_lookup_values(cls, key: str, value: Any, column_type: Any) -> None:
+        """Validate values for list-based lookups"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"List-based lookup for column '{key}' requires list/tuple value")
+
+        for item in value:
+            if item is not None:
+                cls._validate_single_value_type(key, item, column_type)
+
+    @classmethod
+    def _validate_string_convertible_lookup(cls, key: str, value: Any, lookup: str) -> None:
+        """Validate values for string-convertible lookups"""
+        if lookup == "not_like_all" and not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
 
     @classmethod
     def _validate_single_value_type(cls, key: str, value: Any, column_type: Any) -> None:
         """Validate a single value against column type"""
-        # String types (including TEXT, VARCHAR, etc.)
-        if isinstance(column_type, String):
-            if not isinstance(value, str):
-                raise RepositoryError(f"Column '{key}' expects string value, got {type(value).__name__}")
+        validator_map = {
+            String: cls._validate_string_type,
+            Integer: cls._validate_integer_type,
+            Float: cls._validate_float_type,
+            Boolean: cls._validate_boolean_type,
+            DateTime: cls._validate_datetime_type,
+            JSON: cls._validate_json_type,
+        }
 
-        # Integer types
-        elif isinstance(column_type, Integer):
-            if not isinstance(value, int):
-                raise RepositoryError(f"Column '{key}' expects integer value, got {type(value).__name__}")
-
-        # Float types
-        elif isinstance(column_type, Float):
-            if not isinstance(value, (int, float)):
-                raise RepositoryError(f"Column '{key}' expects numeric value, got {type(value).__name__}")
-
-        # Boolean types
-        elif isinstance(column_type, Boolean):
-            if not isinstance(value, bool):
-                raise RepositoryError(f"Column '{key}' expects boolean value, got {type(value).__name__}")
-
-        # DateTime types
-        elif isinstance(column_type, DateTime):
-            from datetime import datetime
-            if not isinstance(value, datetime):
-                raise RepositoryError(f"Column '{key}' expects datetime value, got {type(value).__name__}")
-
-        # JSON/JSONB types
-        elif isinstance(column_type, JSON):
-            # JSON can accept various types, so we're more lenient
-            if not isinstance(value, (dict, list, str, int, float, bool)):
-                raise RepositoryError(f"Column '{key}' expects JSON-compatible value, got {type(value).__name__}")
+        for type_class, validator in validator_map.items():
+            if isinstance(column_type, type_class):
+                validator(key, value)
+                return
 
     @classmethod
-    def validate_model_key(cls, key: str, model_class:Type[Base]) -> Column:
+    def _validate_string_type(cls, key: str, value: Any) -> None:
+        """Validate string type value"""
+        if not isinstance(value, str):
+            raise RepositoryError(f"Column '{key}' expects string value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_integer_type(cls, key: str, value: Any) -> None:
+        """Validate integer type value"""
+        if not isinstance(value, int):
+            raise RepositoryError(f"Column '{key}' expects integer value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_float_type(cls, key: str, value: Any) -> None:
+        """Validate float type value"""
+        if not isinstance(value, (int, float)):
+            raise RepositoryError(f"Column '{key}' expects numeric value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_boolean_type(cls, key: str, value: Any) -> None:
+        """Validate boolean type value"""
+        if not isinstance(value, bool):
+            raise RepositoryError(f"Column '{key}' expects boolean value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_datetime_type(cls, key: str, value: Any) -> None:
+        """Validate datetime type value"""
+        from datetime import datetime
+
+        if not isinstance(value, datetime):
+            raise RepositoryError(f"Column '{key}' expects datetime value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_json_type(cls, key: str, value: Any) -> None:
+        """Validate JSON type value"""
+        if not isinstance(value, (dict, list, str, int, float, bool)):
+            raise RepositoryError(f"Column '{key}' expects JSON-compatible value, got {type(value).__name__}")
+
+    @classmethod
+    def validate_model_key(cls, key: str, model_class: Type[Base]) -> Column:
         column_ = cls._get_model_columns(model_class).get(key, None)
         if column_ is None:
             raise RepositoryError(f"Column '{key}' does not exist in model {model_class.__name__}")
@@ -252,12 +315,7 @@ class QueryBuilder:
             return key_1, key_2, lookup
 
     @classmethod
-    def apply_where(
-            cls,
-            stmt: Any,
-            filter_data: Optional[Dict[str, Any]],
-            model_class: Type[Base]
-    ) -> Any:
+    def apply_where(cls, stmt: Any, filter_data: Optional[Dict[str, Any]], model_class: Type[Base]) -> Any:
         if not filter_data:
             return stmt
 
@@ -270,21 +328,12 @@ class QueryBuilder:
             cls.validate_filter_value(column_, key, value, lookup)
 
             stmt = cls.lookup_registry().apply_lookup(
-                stmt=stmt,
-                column=column_,
-                lookup=lookup,
-                value=value,
-                jsonb_field=c_jsonb_name
+                stmt=stmt, column=column_, lookup=lookup, value=value, jsonb_field=c_jsonb_name
             )
         return stmt
 
     @classmethod
-    def apply_ordering(
-            cls,
-            stmt: Any,
-            order_data: Optional[Tuple[str, ...]],
-            model_class:Type[Base]
-    ) -> Any:
+    def apply_ordering(cls, stmt: Any, order_data: Optional[Tuple[str, ...]], model_class: Type[Base]) -> Any:
         """Apply ORDER BY clause to statement"""
         if not order_data:
             return stmt
@@ -320,11 +369,7 @@ class QueryBuilder:
         return stmt
 
     @classmethod
-    def _parse_order_data(
-        cls,
-        order_data: Tuple[str, ...],
-        model_class: Type[Base]
-    ) -> List[Any]:
+    def _parse_order_data(cls, order_data: Tuple[str, ...], model_class: Type[Base]) -> List[Any]:
         """Parse order data into SQLAlchemy order clauses"""
         parsed_order = []
 
@@ -348,9 +393,6 @@ class QueryBuilder:
                 raise RepositoryError(f"Invalid order field '{field_name}': {str(e)}")
 
         return parsed_order
-
-
-
 
 
 class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
@@ -406,11 +448,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data_ = filter_data.copy() if filter_data else {}
 
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data_,
-            model_class=cls.model()
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -422,11 +460,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data_ = filter_data.copy()
 
         stmt = select(exists(cls.model()))
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data_,
-            model_class=cls.model()
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session() as session:
             result = await session.execute(stmt)
@@ -440,11 +474,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data_,
-            model_class=cls.model()
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -468,20 +498,9 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data_,
-            model_class=cls.model()
-        )
-        stmt = cls.query_builder().apply_ordering(
-            stmt,
-            order_data=order_data,
-            model_class=cls.model()
-        )
-        stmt = cls.query_builder().apply_pagination(
-            stmt,
-            filter_data=filter_data_
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
+        stmt = cls.query_builder().apply_ordering(stmt, order_data=order_data, model_class=cls.model())
+        stmt = cls.query_builder().apply_pagination(stmt, filter_data=filter_data_)
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -582,11 +601,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         data_copy = data.copy()
 
         stmt = update(cls.model())
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data,
-            model_class=cls.model()
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
 
         cls._set_timestamps_on_update(items=[data_copy])
 
@@ -748,11 +763,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         if not filter_data:
             filter_data = {}
         stmt = delete(cls.model())
-        stmt = cls.query_builder().apply_where(
-            stmt,
-            filter_data=filter_data,
-            model_class=cls.model()
-        )
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
 
         async with get_session() as session:
             await session.execute(stmt)

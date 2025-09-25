@@ -892,7 +892,6 @@ def test_get_list_with_zero_limit(e_loop: AbstractEventLoop, users: Any) -> None
         )
 
 
-
 def test_get_list_with_large_offset(e_loop: AbstractEventLoop, users: Any) -> None:
     users_repository = repo_container.users_repository
 

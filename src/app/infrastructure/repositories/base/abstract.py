@@ -8,6 +8,7 @@ from src.app.infrastructure.extensions.psql_ext.psql_ext import Base
 class RepositoryError(Exception):
     pass
 
+
 class AbstractRepository(ABC):
     pass
 
@@ -88,4 +89,3 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         filter_data: dict,
     ) -> None:
         raise NotImplementedError
-
