@@ -396,23 +396,46 @@ class QueryBuilder:
 
 
 class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+    """
+    Base PostgreSQL repository with CRUD operations and bulk operations support.
+
+    Organized into logical sections:
+    - Configuration and Setup
+    - Dataclass Helpers
+    - Read Operations
+    - Write Operations
+    - Bulk Operations
+    - Utility Methods
+    """
+
     MODEL: Optional[Type[Base]] = None
     _QUERY_BUILDER_CLASS: Type[QueryBuilder] = QueryBuilder
 
+    # ==========================================
+    # CONFIGURATION AND SETUP
+    # ==========================================
+
     @classmethod
     def query_builder(cls) -> Type[QueryBuilder]:
+        """Get the query builder class for this repository"""
         if not cls._QUERY_BUILDER_CLASS:
-            raise AttributeError
+            raise AttributeError("Query builder class not configured")
         return cls._QUERY_BUILDER_CLASS
 
     @classmethod
     def model(cls) -> Type[BaseModel]:
+        """Get the SQLAlchemy model class for this repository"""
         if not cls.MODEL:
-            raise AttributeError
+            raise AttributeError("Model class not configured")
         return cls.MODEL
 
+    # ==========================================
+    # DATACLASS HELPERS
+    # ==========================================
+
     @classmethod
-    def __make_out_dataclass(cls) -> Tuple[Callable, List[str]]:
+    def _create_dynamic_dataclass(cls) -> Tuple[Callable, List[str]]:
+        """Create a dynamic dataclass from the model structure"""
         model = cls.model()  # type: ignore
         columns = inspect(model).c
         field_names = [column.name for column in columns]
@@ -431,20 +454,25 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     def out_dataclass_with_columns(
         cls, out_dataclass: Optional[OuterGenericType] = None
     ) -> Tuple[Callable, List[str]]:
+        """Get output dataclass and column names for result conversion"""
         if not out_dataclass:
-            out_dataclass_, columns = cls.__make_out_dataclass()
+            out_dataclass_, columns = cls._create_dynamic_dataclass()
         else:
             out_dataclass_ = out_dataclass  # type: ignore
             columns = [f.name for f in fields(out_dataclass_)]  # type: ignore
 
         return out_dataclass_, columns
 
+    # ==========================================
+    # CRUD OPERATIONS
+    # ==========================================
+
     @classmethod
     async def count(cls, filter_data: Optional[dict] = None) -> int:
+        """Count records matching the filter criteria"""
         if not filter_data:
             filter_data = {}
 
-        # Only deep copy if filter_data will be modified
         filter_data_ = filter_data.copy() if filter_data else {}
 
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
@@ -456,7 +484,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def is_exists(cls, filter_data: dict) -> bool:
-
+        """Check if any records exist matching the filter criteria"""
         filter_data_ = filter_data.copy()
 
         stmt = select(exists(cls.model()))
@@ -471,6 +499,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def get_first(
         cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
+        """Get the first record matching the filter criteria"""
         filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
@@ -493,6 +522,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         order_data: Optional[Tuple[str]] = ("id",),
         out_dataclass: Optional[OuterGenericType] = None,
     ) -> List[OuterGenericType]:
+        """Get a list of records matching the filter criteria with pagination and ordering"""
         if not filter_data:
             filter_data = {}
         filter_data_ = filter_data.copy()
@@ -518,6 +548,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def create(
         cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
+        """Create a single record"""
         data_copy = data.copy()
 
         # Handle explicit ID if provided, otherwise let database auto-increment
@@ -552,9 +583,77 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return None
 
     @classmethod
+    async def update(
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
+    ) -> OuterGenericType | None:
+        """Update records matching the filter criteria"""
+        data_copy = data.copy()
+
+        stmt = update(cls.model())
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
+
+        cls._set_timestamps_on_update(items=[data_copy])
+
+        stmt = stmt.values(**data_copy)
+        stmt.execution_options(synchronize_session="fetch")
+
+        async with get_session(expire_on_commit=True) as session:
+            await session.execute(stmt)
+            await session.commit()
+
+        if is_return_require:
+            return await cls.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
+        return None
+
+    @classmethod
+    async def update_or_create(
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
+    ) -> OuterGenericType | None:
+        """Update existing record or create new one if not found"""
+        is_exists = await cls.is_exists(filter_data=filter_data)
+        if is_exists:
+            data_tmp = deepcopy(data)
+            data_tmp.pop("id", None)
+            data_tmp.pop("uuid", None)
+            item = await cls.update(
+                filter_data=filter_data,
+                data=data_tmp,
+                is_return_require=is_return_require,
+                out_dataclass=out_dataclass,
+            )
+            return item
+        else:
+            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
+            return item
+
+    @classmethod
+    async def remove(
+        cls,
+        filter_data: Dict[str, Any],
+    ) -> None:
+        """Delete records matching the filter criteria"""
+        if not filter_data:
+            filter_data = {}
+        stmt = delete(cls.model())
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
+
+        async with get_session() as session:
+            await session.execute(stmt)
+            await session.commit()
+
+    @classmethod
     async def create_bulk(
         cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
+        """Create multiple records in a single operation"""
         if not items:
             return []
 
@@ -562,9 +661,6 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
-
-        # Normalize data to handle mixed completeness
-        cls._normalize_bulk_data(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
             model_class = cls.model()  # type: ignore
@@ -591,69 +687,16 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return None
 
     @classmethod
-    async def update(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        data_copy = data.copy()
-
-        stmt = update(cls.model())
-        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
-
-        cls._set_timestamps_on_update(items=[data_copy])
-
-        stmt = stmt.values(**data_copy)
-        stmt.execution_options(synchronize_session="fetch")
-
-        async with get_session(expire_on_commit=True) as session:
-            await session.execute(stmt)
-            await session.commit()
-
-        if is_return_require:
-            return await cls.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
-        return None
-
-    @classmethod
-    async def _update_single_with_returning(
-        cls, session: Any, item_data: dict, out_entity_: Callable
-    ) -> OuterGenericType | None:
-        """Update a single item and return the updated entity"""
-        if "id" not in item_data:
-            return None
-
-        model_class = cls.model()  # type: ignore
-        model_table = model_class.__table__  # type: ignore
-
-        item_id = item_data.pop("id")
-        stmt = (
-            update(model_class)
-            .where(model_class.id == item_id)  # type: ignore
-            .values(**item_data)
-            .returning(*model_table.columns.values())
-        )
-        result = await session.execute(stmt)
-        raw = result.fetchone()
-        if raw:
-            # Convert Row to dict using column names
-            column_names = [col.name for col in model_table.columns.values()]
-            entity_data = dict(zip(column_names, raw))
-            return out_entity_(**entity_data)
-        return None
-
-    @classmethod
     async def update_bulk(
         cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
+        """Update multiple records in optimized bulk operation
 
-        # !!! Currently we do 2 queries for updating with RETURNING
-        # Options to achieve per single query:
-        #   Option 1: Keep current ORM approach (cleaner, 2 queries for returning)
-        #   Option 2: Go back to raw SQL (1 query, but more complex)
-        #   Option 3: Hybrid approach - use ORM for non-returning, raw SQL for returning
-
+        Note: Currently uses 2 queries for returning case:
+        - Option 1: Keep current ORM approach (cleaner, 2 queries for returning)
+        - Option 2: Go back to raw SQL (1 query, but more complex)
+        - Option 3: Hybrid approach - use ORM for non-returning, raw SQL for returning
+        """
         if not items:
             return None
 
@@ -668,11 +711,15 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                 await cls._bulk_update_without_returning(session, items_copy)
                 return None
 
+    # ==========================================
+    # BULK OPERATION HELPERS
+    # ==========================================
+
     @classmethod
     async def _bulk_update_with_returning(
         cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType]:
-        """Perform bulk update with RETURNING for result collection using ORM bulk_update_mappings"""
+        """Perform bulk update with RETURNING for result collection using ORM"""
         if not items:
             return []
 
@@ -704,7 +751,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def _bulk_update_without_returning(cls, session: Any, items: List[dict]) -> None:
-        """Perform bulk update without RETURNING using SQLAlchemy's bulk_update_mappings"""
+        """Perform bulk update without RETURNING using SQLAlchemy's bulk operations"""
         if not items:
             return
 
@@ -715,17 +762,39 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         await session.commit()
 
     @classmethod
-    def _set_timestamps_on_update(cls, items: List[dict]) -> None:
-        """Set updated_at on update"""
-        if hasattr(cls.model(), "updated_at"):
-            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-            for item in items:
-                if "updated_at" not in item:
-                    item["updated_at"] = dt_
+    async def _update_single_with_returning(
+        cls, session: Any, item_data: dict, out_entity_: Callable
+    ) -> OuterGenericType | None:
+        """Update a single item and return the updated entity (legacy method)"""
+        if "id" not in item_data:
+            return None
+
+        model_class = cls.model()  # type: ignore
+        model_table = model_class.__table__  # type: ignore
+
+        item_id = item_data.pop("id")
+        stmt = (
+            update(model_class)
+            .where(model_class.id == item_id)  # type: ignore
+            .values(**item_data)
+            .returning(*model_table.columns.values())
+        )
+        result = await session.execute(stmt)
+        raw = result.fetchone()
+        if raw:
+            # Convert Row to dict using column names
+            column_names = [col.name for col in model_table.columns.values()]
+            entity_data = dict(zip(column_names, raw))
+            return out_entity_(**entity_data)
+        return None
+
+    # ==========================================
+    # UTILITY METHODS
+    # ==========================================
 
     @classmethod
     def _set_timestamps_on_create(cls, items: List[dict]) -> None:
-        """Set created_at, updated_at on create"""
+        """Set created_at, updated_at timestamps on create operations"""
         if hasattr(cls.model(), "updated_at") or hasattr(cls.model(), "created_at"):
             dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
             for item in items:
@@ -735,67 +804,10 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                     item["created_at"] = dt_
 
     @classmethod
-    def _normalize_bulk_data(cls, items: List[dict]) -> None:
-        """Normalize bulk data to handle mixed field completeness"""
-        if not items:
-            return
-
-        # Get all unique keys from all items
-        all_keys: set[str] = set()
-        for item in items:
-            all_keys.update(item.keys())
-
-        # Get model column defaults and nullable info
-        model_class = cls.model()  # type: ignore
-        model_table = model_class.__table__  # type: ignore
-
-        # For each item, ensure it has all fields with appropriate defaults
-        for item in items:
-            for key in all_keys:
-                if key not in item:
-                    # Check if column exists in model
-                    if hasattr(model_class, key):
-                        column = getattr(model_table.c, key, None)
-                        if column is not None:
-                            # Only add explicit None if column is nullable and has no default
-                            if column.nullable and column.default is None and column.server_default is None:
-                                item[key] = None
-                            # Don't add anything for columns with defaults - let database handle it
-
-    @classmethod
-    async def update_or_create(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        is_exists = await cls.is_exists(filter_data=filter_data)
-        if is_exists:
-            data_tmp = deepcopy(data)
-            data_tmp.pop("id", None)
-            data_tmp.pop("uuid", None)
-            item = await cls.update(
-                filter_data=filter_data,
-                data=data_tmp,
-                is_return_require=is_return_require,
-                out_dataclass=out_dataclass,
-            )
-            return item
-        else:
-            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
-            return item
-
-    @classmethod
-    async def remove(
-        cls,
-        filter_data: Dict[str, Any],
-    ) -> None:
-        if not filter_data:
-            filter_data = {}
-        stmt = delete(cls.model())
-        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
-
-        async with get_session() as session:
-            await session.execute(stmt)
-            await session.commit()
+    def _set_timestamps_on_update(cls, items: List[dict]) -> None:
+        """Set updated_at timestamp on update operations"""
+        if hasattr(cls.model(), "updated_at"):
+            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+            for item in items:
+                if "updated_at" not in item:
+                    item["updated_at"] = dt_
