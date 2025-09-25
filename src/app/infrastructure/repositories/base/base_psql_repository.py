@@ -647,6 +647,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def update_bulk(
         cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
+
+        # !!! Currently we do 2 queries for updating with RETURNING
+        # Options to achieve per single query:
+        #   Option 1: Keep current ORM approach (cleaner, 2 queries for returning)
+        #   Option 2: Go back to raw SQL (1 query, but more complex)
+        #   Option 3: Hybrid approach - use ORM for non-returning, raw SQL for returning
+
         if not items:
             return None
 
@@ -660,6 +667,52 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             else:
                 await cls._bulk_update_without_returning(session, items_copy)
                 return None
+
+    @classmethod
+    async def _bulk_update_with_returning(
+        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
+    ) -> List[OuterGenericType]:
+        """Perform bulk update with RETURNING for result collection using ORM bulk_update_mappings"""
+        if not items:
+            return []
+
+        model_class = cls.model()  # type: ignore
+
+        # Use SQLAlchemy's bulk_update_mappings with synchronize_session=False for performance
+        await session.execute(update(model_class), items, execution_options={"synchronize_session": False})
+        await session.commit()
+
+        # Get updated items by their IDs
+        updated_ids = [item["id"] for item in items if "id" in item]
+        if not updated_ids:
+            return []
+
+        # Query the updated records
+        stmt = select(model_class).where(model_class.id.in_(updated_ids))
+        result = await session.execute(stmt)
+        updated_records = result.scalars().all()
+
+        # Convert to output dataclass
+        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
+        updated_items = []
+
+        for record in updated_records:
+            entity_data = {c.key: getattr(record, c.key) for c in inspect(record).mapper.column_attrs}
+            updated_items.append(out_entity_(**entity_data))
+
+        return updated_items
+
+    @classmethod
+    async def _bulk_update_without_returning(cls, session: Any, items: List[dict]) -> None:
+        """Perform bulk update without RETURNING using SQLAlchemy's bulk_update_mappings"""
+        if not items:
+            return
+
+        model_class = cls.model()  # type: ignore
+
+        # Use SQLAlchemy's built-in bulk update method
+        await session.execute(update(model_class), items, execution_options={"synchronize_session": False})
+        await session.commit()
 
     @classmethod
     def _set_timestamps_on_update(cls, items: List[dict]) -> None:
@@ -708,28 +761,6 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                             if column.nullable and column.default is None and column.server_default is None:
                                 item[key] = None
                             # Don't add anything for columns with defaults - let database handle it
-
-    @classmethod
-    async def _bulk_update_with_returning(
-        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType]:
-        """Perform bulk update with RETURNING for result collection"""
-        updated_items = []
-        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
-
-        for item_data in items:
-            updated_item = await cls._update_single_with_returning(session, item_data, out_entity_)
-            if updated_item:
-                updated_items.append(updated_item)
-
-        await session.commit()
-        return updated_items
-
-    @classmethod
-    async def _bulk_update_without_returning(cls, session: Any, items: List[dict]) -> None:
-        """Perform bulk update without RETURNING for better performance"""
-        await session.execute(update(cls.model()), items)
-        await session.commit()
 
     @classmethod
     async def update_or_create(
