@@ -3,8 +3,8 @@ from copy import deepcopy
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
-from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update, Column, column, \
-    JSON, DateTime, Boolean, Float, Integer
+from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update, Column, JSON, \
+    DateTime, Boolean, Float, Integer
 
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
 from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel, \
@@ -144,17 +144,22 @@ class QueryBuilder:
 
     __ATR_SEPARATOR: str = "__"
     PAGINATION_KEYS = ["limit", "offset"]
+    _MODEL_COLUMNS_CACHE: Dict[str, Dict[str, Column]] = {}
 
     @classmethod
     def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
         return cls.LOOKUP_REGISTRY_CLASS
 
-    # TODO: cache this method
     @classmethod
     def _get_model_columns(cls, model_class: Type[Base]) -> Dict[str, Column]:
-        """Get all columns from the model"""
-        inspector = inspect(model_class)
-        return {col.name: col for col in inspector.columns}
+        """Get all columns from the model with caching"""
+        model_name = model_class.__name__
+
+        if model_name not in cls._MODEL_COLUMNS_CACHE:
+            inspector = inspect(model_class)
+            cls._MODEL_COLUMNS_CACHE[model_name] = {col.name: col for col in inspector.columns}
+
+        return cls._MODEL_COLUMNS_CACHE[model_name]
 
     @classmethod
     def validate_filter_value(cls, column: Column, key, value:Any, lookup: str) -> None:
@@ -397,7 +402,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         if not filter_data:
             filter_data = {}
 
-        filter_data_ = deepcopy(filter_data)
+        # Only deep copy if filter_data will be modified
+        filter_data_ = filter_data.copy() if filter_data else {}
 
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
         stmt = cls.query_builder().apply_where(
@@ -413,7 +419,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     @classmethod
     async def is_exists(cls, filter_data: dict) -> bool:
 
-        filter_data_ = deepcopy(filter_data)
+        filter_data_ = filter_data.copy()
 
         stmt = select(exists(cls.model()))
         stmt = cls.query_builder().apply_where(
@@ -431,7 +437,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def get_first(
         cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
-        filter_data_ = deepcopy(filter_data)
+        filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
         stmt = cls.query_builder().apply_where(
@@ -459,7 +465,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     ) -> List[OuterGenericType]:
         if not filter_data:
             filter_data = {}
-        filter_data_ = deepcopy(filter_data)
+        filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
         stmt = cls.query_builder().apply_where(
@@ -573,7 +579,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         is_return_require: bool = False,
         out_dataclass: Optional[OuterGenericType] = None,
     ) -> OuterGenericType | None:
-        data_copy = deepcopy(data)
+        data_copy = data.copy()
 
         stmt = update(cls.model())
         stmt = cls.query_builder().apply_where(
