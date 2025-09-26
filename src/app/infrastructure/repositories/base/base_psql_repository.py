@@ -1,6 +1,7 @@
 import datetime as dt
 import re
 from copy import deepcopy
+from datetime import datetime
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
@@ -146,8 +147,9 @@ class PSQLLookupRegistry:
         else:
             value_param = "jsonb_like_val_" + generate_str(size=8)
             return stmt.where(
-                text(f"{key_1.name}->>:jsonb_key LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')")
-                .params(jsonb_key=str(key_2), **{value_param: str(v)})
+                text(f"{key_1.name}->>:jsonb_key LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')").params(
+                    jsonb_key=str(key_2), **{value_param: str(v)}
+                )
             )
 
     @staticmethod
@@ -157,108 +159,134 @@ class PSQLLookupRegistry:
         else:
             value_param = "jsonb_not_like_val_" + generate_str(size=8)
             return stmt.where(
-                text(f"{key_1.name}->>:jsonb_key NOT LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')")
-                .params(jsonb_key=str(key_2), **{value_param: str(v)})
+                text(f"{key_1.name}->>:jsonb_key NOT LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')").params(
+                    jsonb_key=str(key_2), **{value_param: str(v)}
+                )
             )
 
 
-class QueryBuilder:
-    LOOKUP_REGISTRY_CLASS = PSQLLookupRegistry
+# ==========================================
+# SECURITY AND VALIDATION CLASSES
+# ==========================================
 
-    __ATR_SEPARATOR: str = "__"
-    PAGINATION_KEYS = ["limit", "offset"]
-    _MODEL_COLUMNS_CACHE: Dict[str, Dict[str, Column]] = {}
 
-    # Security configuration constants
+class SecurityConfig:
+    """Security configuration constants and patterns"""
+
     MAX_FILTER_COMPLEXITY = 50
-    MAX_STRING_LENGTH = 10000
-    MAX_LIST_LENGTH = 1000
-    ALLOWED_ORDER_PATTERN = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
-    KEY_MAX_LENGTH = 100
-    DANGEROUS_STRNGS = [';', '--', '/*', '*/', 'xp_', 'sp_']
+    MAX_STRING_LENGTH = 5000
+    MAX_LIST_LENGTH = 500
+    KEY_MAX_LENGTH = 50
+    DANGEROUS_STRINGS = [";", "--", "/*", "*/", "xp_", "sp_"]
+    ALLOWED_ORDER_PATTERN = re.compile(r"^-?[a-zA-Z_][a-zA-Z0-9_]*$")
+    ALLOWED_KEY_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+class FilterKeyParser:
+    """Handles parsing of filter keys with lookup operations"""
+
+    ATTRIBUTE_SEPARATOR = "__"
 
     @classmethod
-    def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
-        return cls.LOOKUP_REGISTRY_CLASS
+    def parse(cls, key: str) -> Tuple[str, str, str]:
+        """
+        Parse filter key into components.
+
+        Returns:
+            Tuple[column_name, jsonb_field, lookup_operation]
+
+        Examples:
+            "name" -> ("name", "", "e")
+            "name__ilike" -> ("name", "", "ilike")
+            "meta__preferences__jsonb_like" -> ("meta", "preferences", "jsonb_like")
+        """
+        parts = key.split(cls.ATTRIBUTE_SEPARATOR)
+
+        if len(parts) == 1:
+            return parts[0], "", "e"
+        elif len(parts) == 2:
+            return parts[0], "", parts[1]
+        elif len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+        else:
+            raise RepositoryError(f"Invalid filter key format: '{key}'. Too many separators.")
+
+
+class SecurityValidator:
+    """Handles all security validation for query building"""
 
     @classmethod
-    def _get_model_columns(cls, model_class: Type[Base]) -> Dict[str, Column]:
-        """Get all columns from the model with caching"""
-        model_name = model_class.__name__
-
-        if model_name not in cls._MODEL_COLUMNS_CACHE:
-            inspector = inspect(model_class)
-            cls._MODEL_COLUMNS_CACHE[model_name] = {col.name: col for col in inspector.columns}
-
-        return cls._MODEL_COLUMNS_CACHE[model_name]
+    def validate_filter_complexity(cls, filter_data: Dict[str, Any]) -> None:
+        """Validate filter complexity to prevent DoS attacks"""
+        if len(filter_data) > SecurityConfig.MAX_FILTER_COMPLEXITY:
+            raise RepositoryError(
+                f"Filter complexity exceeds maximum allowed ({SecurityConfig.MAX_FILTER_COMPLEXITY})"
+            )
 
     @classmethod
-    def validate_filter_value(cls, column: Column, key: str, value: Any, lookup: str) -> None:
-        """Validate filter data before building query"""
-        if cls._is_none_value_invalid(column, value):
-            raise RepositoryError(f"Column '{key}' cannot be None (not nullable)")
+    def validate_key_security(cls, key: str) -> None:
+        """Validate filter key for security"""
+        if len(key) > SecurityConfig.KEY_MAX_LENGTH:
+            raise RepositoryError(f"Key too long. Maximum {SecurityConfig.KEY_MAX_LENGTH} characters allowed.")
 
-        if value is None:
-            return  # None is valid for nullable columns
+        if not SecurityConfig.ALLOWED_KEY_PATTERN.match(str(key)):
+            raise RepositoryError(
+                f"Invalid key format: '{key}'. Only alphanumeric characters and underscores allowed."
+            )
 
-        cls._validate_filter_value_security(value)
-
-        if cls._is_list_based_lookup(lookup):
-            cls._validate_list_lookup_values(key, value, column.type)
-            return
-
-        if cls._is_string_convertible_lookup(lookup):
-            cls._validate_string_convertible_lookup(key, value, lookup)
-            return
-
-        cls._validate_single_value_type(key, value, column.type)
+        # Check for potentially dangerous characters
+        if any(char in key for char in SecurityConfig.DANGEROUS_STRINGS):
+            raise RepositoryError(f"Key contains dangerous characters: '{key}'")
 
     @classmethod
-    def _is_none_value_invalid(cls, column: Column, value: Any) -> bool:
-        """Check if None value is invalid for the column"""
-        return value is None and not column.nullable
+    def validate_value_security(cls, value: Any) -> None:
+        """Validate filter value for security"""
+        if isinstance(value, str):
+            if len(value) > SecurityConfig.MAX_STRING_LENGTH:
+                raise RepositoryError(
+                    f"String value too long. Maximum {SecurityConfig.MAX_STRING_LENGTH} characters allowed."
+                )
+        elif isinstance(value, (list, tuple)):
+            if len(value) > SecurityConfig.MAX_LIST_LENGTH:
+                raise RepositoryError(
+                    f"List value too long. Maximum {SecurityConfig.MAX_LIST_LENGTH} items allowed."
+                )
+            for item in value:
+                cls.validate_value_security(item)
 
     @classmethod
-    def _is_list_based_lookup(cls, lookup: str) -> bool:
-        """Check if lookup requires list/tuple values"""
-        return lookup in ("in", "not_in")
+    def validate_order_field(cls, order_field: str) -> None:
+        """Validate order field for security"""
+        if not SecurityConfig.ALLOWED_ORDER_PATTERN.match(order_field):
+            raise RepositoryError(
+                f"Invalid order field format: '{order_field}'. "
+                f"Only alphanumeric characters, underscores, and optional leading dash allowed."
+            )
+
+        if len(order_field) > SecurityConfig.KEY_MAX_LENGTH:
+            raise RepositoryError(
+                f"Order field too long. Maximum {SecurityConfig.KEY_MAX_LENGTH} characters allowed."
+            )
+
+
+class TypeValidator:
+    """Handles type validation for different column types"""
+
+    TYPE_VALIDATORS = {
+        String: "_validate_string_type",
+        Integer: "_validate_integer_type",
+        Float: "_validate_float_type",
+        Boolean: "_validate_boolean_type",
+        DateTime: "_validate_datetime_type",
+        JSON: "_validate_json_type",
+    }
 
     @classmethod
-    def _is_string_convertible_lookup(cls, lookup: str) -> bool:
-        """Check if lookup converts values to strings"""
-        return lookup in ("not_like_all", "like", "jsonb_like", "jsonb_not_like")
-
-    @classmethod
-    def _validate_list_lookup_values(cls, key: str, value: Any, column_type: Any) -> None:
-        """Validate values for list-based lookups"""
-        if not isinstance(value, (list, tuple)):
-            raise RepositoryError(f"List-based lookup for column '{key}' requires list/tuple value")
-
-        for item in value:
-            if item is not None:
-                cls._validate_single_value_type(key, item, column_type)
-
-    @classmethod
-    def _validate_string_convertible_lookup(cls, key: str, value: Any, lookup: str) -> None:
-        """Validate values for string-convertible lookups"""
-        if lookup == "not_like_all" and not isinstance(value, (list, tuple)):
-            raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
-
-    @classmethod
-    def _validate_single_value_type(cls, key: str, value: Any, column_type: Any) -> None:
+    def validate_value_type(cls, key: str, value: Any, column_type: Any) -> None:
         """Validate a single value against column type"""
-        validator_map = {
-            String: cls._validate_string_type,
-            Integer: cls._validate_integer_type,
-            Float: cls._validate_float_type,
-            Boolean: cls._validate_boolean_type,
-            DateTime: cls._validate_datetime_type,
-            JSON: cls._validate_json_type,
-        }
-
-        for type_class, validator in validator_map.items():
+        for type_class, validator_method in cls.TYPE_VALIDATORS.items():
             if isinstance(column_type, type_class):
-                validator(key, value)
+                getattr(cls, validator_method)(key, value)
                 return
 
     @classmethod
@@ -288,7 +316,6 @@ class QueryBuilder:
     @classmethod
     def _validate_datetime_type(cls, key: str, value: Any) -> None:
         """Validate datetime type value"""
-        from datetime import datetime
 
         if not isinstance(value, datetime):
             raise RepositoryError(f"Column '{key}' expects datetime value, got {type(value).__name__}")
@@ -299,94 +326,188 @@ class QueryBuilder:
         if not isinstance(value, (dict, list, str, int, float, bool)):
             raise RepositoryError(f"Column '{key}' expects JSON-compatible value, got {type(value).__name__}")
 
+
+# ==========================================
+# MAIN QUERY BUILDER CLASS
+# ==========================================
+
+
+class QueryBuilder:
+    """
+    Main query builder class responsible for constructing SQL queries with security validations.
+
+    This class is organized into logical sections:
+    - Configuration and Setup
+    - Column Management
+    - Filter Processing
+    - Ordering and Pagination
+    - Validation Orchestration
+    """
+
+    # ==========================================
+    # CONFIGURATION
+    # ==========================================
+
+    LOOKUP_REGISTRY_CLASS = PSQLLookupRegistry
+    PAGINATION_KEYS = ["limit", "offset"]
+    _MODEL_COLUMNS_CACHE: Dict[str, Dict[str, Column]] = {}
+
+    # ==========================================
+    # CORE QUERY BUILDING METHODS
+    # ==========================================
+
+    @classmethod
+    def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
+        """Get the lookup registry for SQL operations"""
+        return cls.LOOKUP_REGISTRY_CLASS
+
+    @classmethod
+    def _get_model_columns(cls, model_class: Type[Base]) -> Dict[str, Column]:
+        """Get all columns from the model with caching"""
+        model_name = model_class.__name__
+
+        if model_name not in cls._MODEL_COLUMNS_CACHE:
+            inspector = inspect(model_class)
+            cls._MODEL_COLUMNS_CACHE[model_name] = {col.name: col for col in inspector.columns}
+
+        return cls._MODEL_COLUMNS_CACHE[model_name]
+
     @classmethod
     def validate_model_key(cls, key: str, model_class: Type[Base]) -> Column:
+        """Validate that a key exists in the model and return the column"""
         column_ = cls._get_model_columns(model_class).get(key, None)
         if column_ is None:
             raise RepositoryError(f"Column '{key}' does not exist in model {model_class.__name__}")
         return column_
 
-    @classmethod
-    def _parse_filter_key(cls, key: str) -> Tuple[str, str, str]:  # type: ignore
-        splitted: list = key.split(cls.__ATR_SEPARATOR)
+    # ==========================================
+    # FILTER VALIDATION METHODS
+    # ==========================================
 
-        if len(splitted) == 1:
-            key_1 = splitted[0]
-            key_2 = ""
-            return key_1, key_2, "e"
-        elif len(splitted) == 2:
-            key_1 = splitted[0]
-            key_2 = ""
-            lookup = splitted[1]
-            return key_1, key_2, lookup
-        elif len(splitted) == 3:
-            key_1 = splitted[0]
-            key_2 = splitted[1]
-            lookup = splitted[2]
-            return key_1, key_2, lookup
+    @classmethod
+    def validate_filter_value(cls, column: Column, key: str, value: Any, lookup: str) -> None:
+        """
+        Comprehensive validation of filter values.
+
+        Validates:
+        - None values against nullable columns
+        - Security constraints
+        - Type compatibility
+        - Lookup-specific requirements
+        """
+        # Check nullable constraints
+        if cls._is_none_value_invalid(column, value):
+            raise RepositoryError(f"Column '{key}' cannot be None (not nullable)")
+
+        if value is None:
+            return  # None is valid for nullable columns
+
+        # Security validation
+        SecurityValidator.validate_value_security(value)
+
+        # Lookup-specific validation
+        if cls._is_list_based_lookup(lookup):
+            cls._validate_list_lookup_values(key, value, column.type)
+        elif cls._is_string_convertible_lookup(lookup):
+            cls._validate_string_convertible_lookup(key, value, lookup)
+        else:
+            # Type validation for single values
+            TypeValidator.validate_value_type(key, value, column.type)
+
+    @classmethod
+    def _is_none_value_invalid(cls, column: Column, value: Any) -> bool:
+        """Check if None value is invalid for the column"""
+        return value is None and not column.nullable
+
+    @classmethod
+    def _is_list_based_lookup(cls, lookup: str) -> bool:
+        """Check if lookup requires list/tuple values"""
+        return lookup in ("in", "not_in")
+
+    @classmethod
+    def _is_string_convertible_lookup(cls, lookup: str) -> bool:
+        """Check if lookup converts values to strings"""
+        return lookup in ("not_like_all", "like", "jsonb_like", "jsonb_not_like", "ilike")
+
+    @classmethod
+    def _validate_list_lookup_values(cls, key: str, value: Any, column_type: Any) -> None:
+        """Validate values for list-based lookups (IN, NOT IN)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"List-based lookup for column '{key}' requires list/tuple value")
+
+        # Validate each item in the list
+        for item in value:
+            if item is not None:
+                TypeValidator.validate_value_type(key, item, column_type)
+
+    @classmethod
+    def _validate_string_convertible_lookup(cls, key: str, value: Any, lookup: str) -> None:
+        """Validate values for string-convertible lookups (LIKE, ILIKE, etc.)"""
+        if lookup == "not_like_all" and not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
+
+    # ==========================================
+    # MAIN QUERY PROCESSING METHODS
+    # ==========================================
 
     @classmethod
     def apply_where(cls, stmt: Any, filter_data: Optional[Dict[str, Any]], model_class: Type[Base]) -> Any:
+        """
+        Apply WHERE clauses to a SQL statement based on filter data.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            filter_data: Dictionary of filter conditions
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            Modified SQLAlchemy statement with WHERE clauses applied
+        """
         if not filter_data:
             return stmt
 
         # Security validation
-        cls._validate_filter_complexity(filter_data)
+        SecurityValidator.validate_filter_complexity(filter_data)
 
+        # Process each filter
         for key, value in filter_data.items():
             if key in cls.PAGINATION_KEYS:
                 continue
 
-            c_name, c_jsonb_name, lookup = cls._parse_filter_key(key)
+            # Parse and validate the filter key
+            column_name, jsonb_field, lookup = FilterKeyParser.parse(key)
 
-            cls._validate_filter_key_security(c_name)
-            column_ = cls.validate_model_key(c_name, model_class)
+            # Security validation
+            SecurityValidator.validate_key_security(column_name)
+            if jsonb_field:
+                SecurityValidator.validate_key_security(jsonb_field)
 
-            cls.validate_filter_value(column_, key, value, lookup)
-            if c_jsonb_name:
-                cls._validate_filter_key_security(c_jsonb_name)
+            # Validate column exists and get column object
+            column = cls.validate_model_key(column_name, model_class)
 
+            # Comprehensive value validation
+            cls.validate_filter_value(column, key, value, lookup)
+
+            # Apply the lookup operation
             stmt = cls.lookup_registry().apply_lookup(
-                stmt=stmt, column=column_, lookup=lookup, value=value, jsonb_field=c_jsonb_name
+                stmt=stmt, column=column, lookup=lookup, value=value, jsonb_field=jsonb_field
             )
+
         return stmt
 
     @classmethod
-    def _validate_filter_complexity(cls, filter_data: Dict[str, Any]) -> None:
-        """Validate filter complexity to prevent DoS attacks"""
-        if len(filter_data) > cls.MAX_FILTER_COMPLEXITY:
-            raise RepositoryError(f"Filter complexity exceeds maximum allowed ({cls.MAX_FILTER_COMPLEXITY})")
-
-
-    @classmethod
-    def _validate_filter_key_security(cls, key: str) -> None:
-        """Validate filter key for security"""
-        if len(key) > cls.KEY_MAX_LENGTH:
-            raise RepositoryError(f"Filter key too long. Maximum {cls.KEY_MAX_LENGTH} characters allowed.")
-
-        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', str(key)):
-            raise RepositoryError(
-                f"Invalid key format: '{key}'. Only alphanumeric characters and underscores allowed.")
-
-        # Check for potentially dangerous characters
-        if any(char in key for char in cls.DANGEROUS_STRNGS):
-            raise RepositoryError(f"Filter key contains dangerous characters: '{key}'")
-
-    @classmethod
-    def _validate_filter_value_security(cls, value: Any) -> None:
-        """Validate filter value for security"""
-        if isinstance(value, str):
-            if len(value) > cls.MAX_STRING_LENGTH:
-                raise RepositoryError(f"String value too long. Maximum {cls.MAX_STRING_LENGTH} characters allowed.")
-        elif isinstance(value, (list, tuple)):
-            if len(value) > cls.MAX_LIST_LENGTH:
-                raise RepositoryError(f"List value too long. Maximum {cls.MAX_LIST_LENGTH} items allowed.")
-            for item in value:
-                cls._validate_filter_value_security(item)
-
-    @classmethod
     def apply_ordering(cls, stmt: Any, order_data: Optional[Tuple[str, ...]], model_class: Type[Base]) -> Any:
-        """Apply ORDER BY clause to statement"""
+        """
+        Apply ORDER BY clause to statement.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            order_data: Tuple of field names for ordering (prefix with "-" for DESC)
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            Modified SQLAlchemy statement with ORDER BY clause applied
+        """
         if not order_data:
             return stmt
 
@@ -398,21 +519,30 @@ class QueryBuilder:
 
     @classmethod
     def apply_pagination(cls, stmt: Any, filter_data: Optional[Dict[str, Any]] = None) -> Any:
-        """Apply LIMIT and OFFSET to statement"""
+        """
+        Apply LIMIT and OFFSET to statement for pagination.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            filter_data: Dictionary containing "limit" and "offset" keys
+
+        Returns:
+            Modified SQLAlchemy statement with pagination applied
+        """
         if not filter_data:
             return stmt
 
-        # Extract pagination parameters
+        # Extract and validate pagination parameters
         limit = filter_data.get("limit")
         offset = filter_data.get("offset", 0)
 
-        # Apply offset
+        # Apply offset if provided
         if offset:
             if not isinstance(offset, int) or offset < 0:
                 raise RepositoryError(f"Offset must be non-negative integer, got: {offset}")
             stmt = stmt.offset(offset)
 
-        # Apply limit
+        # Apply limit if provided
         if limit is not None:
             if not isinstance(limit, int) or limit <= 0:
                 raise RepositoryError(f"Limit must be positive integer, got: {limit}")
@@ -420,19 +550,35 @@ class QueryBuilder:
 
         return stmt
 
+    # ==========================================
+    # HELPER METHODS
+    # ==========================================
+
     @classmethod
     def _parse_order_data(cls, order_data: Tuple[str, ...], model_class: Type[Base]) -> List[Any]:
-        """Parse order data into SQLAlchemy order clauses"""
+        """
+        Parse order data into SQLAlchemy order clauses.
+
+        Args:
+            order_data: Tuple of field names, optionally prefixed with "-" for descending order
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            List of SQLAlchemy order clauses
+
+        Example:
+            ("name", "-created_at") -> [Column.asc(), Column.desc()]
+        """
         parsed_order = []
 
         for order_item in order_data:
             if not isinstance(order_item, str):
                 raise RepositoryError(f"Order field must be string, got: {type(order_item).__name__}")
 
-            # Security validation for order field
-            cls._validate_order_field_security(order_item)
+            # Security validation
+            SecurityValidator.validate_order_field(order_item)
 
-            # Handle descending order (prefix with -)
+            # Parse direction and field name
             if order_item.startswith("-"):
                 field_name = order_item[1:]
                 direction = "desc"
@@ -440,23 +586,14 @@ class QueryBuilder:
                 field_name = order_item
                 direction = "asc"
 
-            # Validate field exists in model
+            # Validate field exists in model and create order clause
             try:
-                column_ = cls.validate_model_key(field_name, model_class)
-                parsed_order.append(getattr(column_, direction)())
+                column = cls.validate_model_key(field_name, model_class)
+                parsed_order.append(getattr(column, direction)())
             except Exception as e:
                 raise RepositoryError(f"Invalid order field '{field_name}': {str(e)}")
 
         return parsed_order
-
-    @classmethod
-    def _validate_order_field_security(cls, order_field: str) -> None:
-        """Validate order field for security"""
-        if not cls.ALLOWED_ORDER_PATTERN.match(order_field):
-            raise RepositoryError(f"Invalid order field format: '{order_field}'. Only alphanumeric characters, underscores, and optional leading dash allowed.")
-
-        if len(order_field) > cls.KEY_MAX_LENGTH:
-            raise RepositoryError(f"Order field too long. Maximum {cls.KEY_MAX_LENGTH} characters allowed.")
 
 
 class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
