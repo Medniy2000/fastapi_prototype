@@ -42,7 +42,7 @@ if [ ! "$(docker ps -aq -f name=${PROJECT_NAME_SLUG}_rabbitmq)" ]; then
     -p $MESSAGE_BROKER_PORT:5672 \
     -e RABBITMQ_DEFAULT_USER=$MESSAGE_BROKER_USER \
     -e RABBITMQ_DEFAULT_PASS=$MESSAGE_BROKER_PASSWORD \
-    rabbitmq:3.11.6-management || true
+    rabbitmq:4.1.4-management-alpine || true
 fi
 echo "  ✅ ${PROJECT_NAME_SLUG}_rabbitmq UP"
 
