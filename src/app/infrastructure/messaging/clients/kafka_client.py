@@ -23,7 +23,7 @@ class KafkaClient:
             brokers = metadata.brokers() if callable(metadata.brokers) else metadata.brokers
             return len(brokers) > 0
         except Exception as ex:
-            logger.error(f"{ex}")
+            logger.warning(f"{ex}")
             return False
         finally:
             await client.close()
