@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 from copy import deepcopy
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
@@ -135,7 +136,7 @@ class PSQLLookupRegistry:
             raise RepositoryError("NOT_LIKE_ALL lookup requires list or tuple value")
 
         for item in value:
-            stmt = stmt.filter(column.cast(String).like(f"%{str(item)}%"))
+            stmt = stmt.filter(~column.cast(String).like(f"%{str(item)}%"))
         return stmt
 
     @staticmethod
@@ -143,9 +144,10 @@ class PSQLLookupRegistry:
         if not key_2:
             return stmt.where(key_1.cast(String).like(f"%{v}%"))
         else:
-            key_ = "jsonb_like" + generate_str(size=4)
+            value_param = "jsonb_like_val_" + generate_str(size=8)
             return stmt.where(
-                text(f"{key_1}->>'{key_2}' LIKE CONCAT('%', CAST(:{key_} AS TEXT), '%')").params(**{key_: str(v)})
+                text(f"{key_1.name}->>:jsonb_key LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')")
+                .params(jsonb_key=str(key_2), **{value_param: str(v)})
             )
 
     @staticmethod
@@ -153,11 +155,10 @@ class PSQLLookupRegistry:
         if not key_2:
             return stmt.where(~key_1.cast(String).like(f"%{v}%"))
         else:
-            key_ = "jsonb_n_like" + generate_str(size=4)
+            value_param = "jsonb_not_like_val_" + generate_str(size=8)
             return stmt.where(
-                text(f"{key_1}->>'{key_2}' NOT LIKE CONCAT('%', CAST(:{key_} AS TEXT), '%')").params(
-                    **{key_: str(v)}
-                )
+                text(f"{key_1.name}->>:jsonb_key NOT LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')")
+                .params(jsonb_key=str(key_2), **{value_param: str(v)})
             )
 
 
@@ -167,6 +168,14 @@ class QueryBuilder:
     __ATR_SEPARATOR: str = "__"
     PAGINATION_KEYS = ["limit", "offset"]
     _MODEL_COLUMNS_CACHE: Dict[str, Dict[str, Column]] = {}
+
+    # Security configuration constants
+    MAX_FILTER_COMPLEXITY = 50
+    MAX_STRING_LENGTH = 10000
+    MAX_LIST_LENGTH = 1000
+    ALLOWED_ORDER_PATTERN = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
+    KEY_MAX_LENGTH = 100
+    DANGEROUS_STRNGS = [';', '--', '/*', '*/', 'xp_', 'sp_']
 
     @classmethod
     def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
@@ -191,6 +200,8 @@ class QueryBuilder:
 
         if value is None:
             return  # None is valid for nullable columns
+
+        cls._validate_filter_value_security(value)
 
         if cls._is_list_based_lookup(lookup):
             cls._validate_list_lookup_values(key, value, column.type)
@@ -319,18 +330,59 @@ class QueryBuilder:
         if not filter_data:
             return stmt
 
+        # Security validation
+        cls._validate_filter_complexity(filter_data)
+
         for key, value in filter_data.items():
             if key in cls.PAGINATION_KEYS:
                 continue
+
             c_name, c_jsonb_name, lookup = cls._parse_filter_key(key)
 
+            cls._validate_filter_key_security(c_name)
             column_ = cls.validate_model_key(c_name, model_class)
+
             cls.validate_filter_value(column_, key, value, lookup)
+            if c_jsonb_name:
+                cls._validate_filter_key_security(c_jsonb_name)
 
             stmt = cls.lookup_registry().apply_lookup(
                 stmt=stmt, column=column_, lookup=lookup, value=value, jsonb_field=c_jsonb_name
             )
         return stmt
+
+    @classmethod
+    def _validate_filter_complexity(cls, filter_data: Dict[str, Any]) -> None:
+        """Validate filter complexity to prevent DoS attacks"""
+        if len(filter_data) > cls.MAX_FILTER_COMPLEXITY:
+            raise RepositoryError(f"Filter complexity exceeds maximum allowed ({cls.MAX_FILTER_COMPLEXITY})")
+
+
+    @classmethod
+    def _validate_filter_key_security(cls, key: str) -> None:
+        """Validate filter key for security"""
+        if len(key) > cls.KEY_MAX_LENGTH:
+            raise RepositoryError(f"Filter key too long. Maximum {cls.KEY_MAX_LENGTH} characters allowed.")
+
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', str(key)):
+            raise RepositoryError(
+                f"Invalid key format: '{key}'. Only alphanumeric characters and underscores allowed.")
+
+        # Check for potentially dangerous characters
+        if any(char in key for char in cls.DANGEROUS_STRNGS):
+            raise RepositoryError(f"Filter key contains dangerous characters: '{key}'")
+
+    @classmethod
+    def _validate_filter_value_security(cls, value: Any) -> None:
+        """Validate filter value for security"""
+        if isinstance(value, str):
+            if len(value) > cls.MAX_STRING_LENGTH:
+                raise RepositoryError(f"String value too long. Maximum {cls.MAX_STRING_LENGTH} characters allowed.")
+        elif isinstance(value, (list, tuple)):
+            if len(value) > cls.MAX_LIST_LENGTH:
+                raise RepositoryError(f"List value too long. Maximum {cls.MAX_LIST_LENGTH} items allowed.")
+            for item in value:
+                cls._validate_filter_value_security(item)
 
     @classmethod
     def apply_ordering(cls, stmt: Any, order_data: Optional[Tuple[str, ...]], model_class: Type[Base]) -> Any:
@@ -377,6 +429,9 @@ class QueryBuilder:
             if not isinstance(order_item, str):
                 raise RepositoryError(f"Order field must be string, got: {type(order_item).__name__}")
 
+            # Security validation for order field
+            cls._validate_order_field_security(order_item)
+
             # Handle descending order (prefix with -)
             if order_item.startswith("-"):
                 field_name = order_item[1:]
@@ -393,6 +448,15 @@ class QueryBuilder:
                 raise RepositoryError(f"Invalid order field '{field_name}': {str(e)}")
 
         return parsed_order
+
+    @classmethod
+    def _validate_order_field_security(cls, order_field: str) -> None:
+        """Validate order field for security"""
+        if not cls.ALLOWED_ORDER_PATTERN.match(order_field):
+            raise RepositoryError(f"Invalid order field format: '{order_field}'. Only alphanumeric characters, underscores, and optional leading dash allowed.")
+
+        if len(order_field) > cls.KEY_MAX_LENGTH:
+            raise RepositoryError(f"Order field too long. Maximum {cls.KEY_MAX_LENGTH} characters allowed.")
 
 
 class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
