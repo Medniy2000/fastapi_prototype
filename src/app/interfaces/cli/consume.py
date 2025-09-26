@@ -45,6 +45,28 @@ if __name__ == "__main__":
         asyncio.set_event_loop(e_loop)
 
     try:
+
+        # =================================================
+        # WAIT FOR READINESS
+        # =================================================
+        sleep_before = 120
+        slept = 10
+        logger.info("Waiting for readiness ..")
+        e_loop.run_until_complete(asyncio.sleep(slept))
+
+        is_healthy = e_loop.run_until_complete(mq_client.is_healthy())
+        while slept < sleep_before and not is_healthy:
+            logger.info(f"Waiting for readiness {slept}/{sleep_before} sec..")
+            sleep_ = 15
+            e_loop.run_until_complete(asyncio.sleep(sleep_))
+            slept += sleep_
+            is_healthy = e_loop.run_until_complete(mq_client.is_healthy())
+        logger.info("READY.." if is_healthy else "NOT READY!")
+
+        # =================================================
+        # RUN CONSUMER
+        # =================================================
+
         handlers_by_event_ = HANDLERS_MAP
         aggregator_ = queue_processing_aggregator
         e_loop.run_until_complete(

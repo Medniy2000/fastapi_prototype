@@ -33,7 +33,7 @@ class RabbitQueueClientClient:
             await connection_.close()
             return True
         except Exception as ex:
-            logger.error(f"{ex}")
+            logger.warning(f"{ex}")
             return False
 
     async def __get_connection(self) -> AbstractRobustConnection:
