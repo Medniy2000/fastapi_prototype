@@ -1,133 +1,642 @@
 import datetime as dt
+import re
 from copy import deepcopy
+from datetime import datetime
 from dataclasses import fields, make_dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Type
 
-from sqlalchemy import delete, exists, func, insert, inspect, select, Select, String, text, update
+from sqlalchemy import (
+    delete,
+    exists,
+    func,
+    insert,
+    inspect,
+    select,
+    Select,
+    String,
+    text,
+    update,
+    Column,
+    JSON,
+    DateTime,
+    Boolean,
+    Float,
+    Integer,
+)
 
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
-from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType, BaseModel
+from src.app.infrastructure.repositories.base.abstract import (
+    AbstractBaseRepository,
+    OuterGenericType,
+    BaseModel,
+    RepositoryError,
+)
 from src.app.infrastructure.utils.common import generate_str
 
 
-class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
-    MODEL: Optional[Type[Base]] = None
-
-    __ATR_SEPARATOR: str = "__"
+class PSQLLookupRegistry:
     LOOKUP_MAP = {
-        "gt": lambda stmt, key1, _, v: stmt.where(key1 > v),
-        "gte": lambda stmt, key1, _, v: stmt.where(key1 >= v),
-        "lt": lambda stmt, key1, _, v: stmt.where(key1 < v),
-        "lte": lambda stmt, key1, _, v: stmt.where(key1 <= v),
-        "e": lambda stmt, key1, _, v: stmt.where(key1 == v),
-        "ne": lambda stmt, key1, _, v: stmt.where(key1 != v),
-        "in": lambda stmt, key1, _, v: stmt.where(key1.in_(v)),  # does not work with None
-        "not_in": lambda stmt, key1, _, v: stmt.where(key1.not_in(v)),  # does not work with None
-        "like": lambda stmt, key1, _, v: stmt.filter(key1.cast(String).like(f"%{str(v)}%")),
-        "not_like_all": lambda stmt, key1, _, v: BasePSQLRepository.__not_like_all(stmt, key1, v),
-        "jsonb_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_like(stmt, key1, key_2, v),
-        "jsonb_not_like": lambda stmt, key1, key_2, v: BasePSQLRepository.__jsonb_not_like(stmt, key1, key_2, v),
+        "gt": lambda stmt, key1, _, v: PSQLLookupRegistry._greater_than(stmt, key1, v),
+        "gte": lambda stmt, key1, _, v: PSQLLookupRegistry._greater_than_equal(stmt, key1, v),
+        "lt": lambda stmt, key1, _, v: PSQLLookupRegistry._less_than(stmt, key1, v),
+        "lte": lambda stmt, key1, _, v: PSQLLookupRegistry._less_than_equal(stmt, key1, v),
+        "e": lambda stmt, key1, _, v: PSQLLookupRegistry._equal(stmt, key1, v),
+        "ne": lambda stmt, key1, _, v: PSQLLookupRegistry._not_equal(stmt, key1, v),
+        "in": lambda stmt, key1, _, v: PSQLLookupRegistry._in(stmt, key1, v),  # does not work with None
+        "not_in": lambda stmt, key1, _, v: PSQLLookupRegistry._not_in(stmt, key1, v),  # does not work with None
+        "ilike": lambda stmt, key1, _, v: PSQLLookupRegistry._ilike(stmt, key1, v),
+        "like": lambda stmt, key1, _, v: PSQLLookupRegistry._like(stmt, key1, v),
+        "not_like_all": lambda stmt, key1, _, v: PSQLLookupRegistry._not_like_all(stmt, key1, v),
+        "jsonb_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_like(stmt, key1, key_2, v),
+        "jsonb_not_like": lambda stmt, key1, key_2, v: PSQLLookupRegistry._jsonb_not_like(stmt, key1, key_2, v),
     }
+    _JSONB_LOOKUPS = (
+        "jsonb_like",
+        "jsonb_not_like",
+    )
+
+    @classmethod
+    def get_operation(cls, name: str) -> Callable:
+        """Get lookup operation by name"""
+        operation = cls.LOOKUP_MAP.get(name, None)
+        if not operation:
+            raise RepositoryError(f"Unknown lookup operation: '{name}'. Available: {list(cls.LOOKUP_MAP.keys())}")
+        return operation
+
+    @classmethod
+    def apply_lookup(
+        cls, stmt: Any, column: Any, lookup: str, value: Any, jsonb_field: Optional[str] = None
+    ) -> Any:
+        """Apply lookup operation to statement"""
+        operation = cls.get_operation(lookup)
+
+        if lookup in cls._JSONB_LOOKUPS:
+            return operation(stmt, column, jsonb_field, value)
+        else:
+            return operation(stmt, column, jsonb_field, value)
+
+    # Core lookup operations
+    @staticmethod
+    def _equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Equal comparison: column = value"""
+        return stmt.where(column == value)
 
     @staticmethod
-    def __not_like_all(stmt: Any, k: Any, v: Any) -> Select:
-        for item in v:
-            stmt = stmt.filter(k.cast(String).like(f"%{str(item)}%"))
+    def _not_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Not equal comparison: column != value"""
+        return stmt.where(column != value)
+
+    @staticmethod
+    def _greater_than(stmt: Any, column: Any, value: Any) -> Any:
+        """Greater than comparison: column > value"""
+        return stmt.where(column > value)
+
+    @staticmethod
+    def _greater_than_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Greater than or equal comparison: column >= value"""
+        return stmt.where(column >= value)
+
+    @staticmethod
+    def _less_than(stmt: Any, column: Any, value: Any) -> Any:
+        """Less than comparison: column < value"""
+        return stmt.where(column < value)
+
+    @staticmethod
+    def _less_than_equal(stmt: Any, column: Any, value: Any) -> Any:
+        """Less than or equal comparison: column <= value"""
+        return stmt.where(column <= value)
+
+    @staticmethod
+    def _in(stmt: Any, column: Any, value: List[Any]) -> Any:
+        """IN comparison: column IN (values)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("IN lookup requires list or tuple value")
+        return stmt.where(column.in_(value))
+
+    @staticmethod
+    def _not_in(stmt: Any, column: Any, value: List[Any]) -> Any:
+        """NOT IN comparison: column NOT IN (values)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("NOT_IN lookup requires list or tuple value")
+        return stmt.where(column.not_in(value))
+
+    @staticmethod
+    def _like(stmt: Any, column: Any, value: Any) -> Any:
+        """LIKE comparison: column LIKE %value%"""
+        return stmt.filter(column.cast(String).like(f"%{str(value)}%"))
+
+    @staticmethod
+    def _ilike(stmt: Any, column: Any, value: Any) -> Any:
+        """LIKE comparison: column LIKE %value%"""
+        return stmt.filter(column.cast(String).ilike(f"%{str(value)}%"))
+
+    @staticmethod
+    def _not_like_all(stmt: Any, column: Any, value: List[str]) -> Select:
+        """NOT LIKE ALL: column NOT LIKE ALL values (all values must not match)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError("NOT_LIKE_ALL lookup requires list or tuple value")
+
+        for item in value:
+            stmt = stmt.filter(~column.cast(String).like(f"%{str(item)}%"))
         return stmt
 
     @staticmethod
-    def __jsonb_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
+    def _jsonb_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
         if not key_2:
             return stmt.where(key_1.cast(String).like(f"%{v}%"))
         else:
-            key_ = "jsonb_like" + generate_str(size=4)
+            value_param = "jsonb_like_val_" + generate_str(size=8)
             return stmt.where(
-                text(f"{key_1}->>'{key_2}' LIKE CONCAT('%', CAST(:{key_} AS TEXT), '%')").params(**{key_: str(v)})
-            )
-
-    @staticmethod
-    def __jsonb_not_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
-        if not key_2:
-            return stmt.where(~key_1.cast(String).like(f"%{v}%"))
-        else:
-            key_ = "jsonb_n_like" + generate_str(size=4)
-            return stmt.where(
-                text(f"{key_1}->>'{key_2}' NOT LIKE CONCAT('%', CAST(:{key_} AS TEXT), '%')").params(
-                    **{key_: str(v)}
+                text(f"{key_1.name}->>:jsonb_key LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')").params(
+                    jsonb_key=str(key_2), **{value_param: str(v)}
                 )
             )
 
-    @classmethod
-    def _parse_filter_key(cls, key: str) -> Tuple[str, str, str]:  # type: ignore
-        splitted: list = key.split(cls.__ATR_SEPARATOR)
+    @staticmethod
+    def _jsonb_not_like(stmt: Any, key_1: Any, key_2: Any, v: Any) -> Select:
+        if not key_2:
+            return stmt.where(~key_1.cast(String).like(f"%{v}%"))
+        else:
+            value_param = "jsonb_not_like_val_" + generate_str(size=8)
+            return stmt.where(
+                text(f"{key_1.name}->>:jsonb_key NOT LIKE CONCAT('%', CAST(:{value_param} AS TEXT), '%')").params(
+                    jsonb_key=str(key_2), **{value_param: str(v)}
+                )
+            )
 
-        if len(splitted) == 1:
-            key_1 = splitted[0]
-            key_2 = ""
-            return key_1, key_2, "e"
-        elif len(splitted) == 2:
-            key_1 = splitted[0]
-            key_2 = ""
-            lookup = splitted[1]
-            return key_1, key_2, lookup
-        elif len(splitted) == 3:
-            key_1 = splitted[0]
-            key_2 = splitted[1]
-            lookup = splitted[2]
-            return key_1, key_2, lookup
 
-    @classmethod
-    def _parse_order_data(cls, order_data: Optional[Tuple[str]] = None) -> tuple:
-        if not order_data:
-            order_data = ()  # type: ignore
-        parsed_order_data = []
+# ==========================================
+# SECURITY AND VALIDATION CLASSES
+# ==========================================
 
-        for order_item in order_data:  # type: ignore
-            order_item_tmp = order_item
-            if order_item_tmp.startswith("-"):
-                order_item_tmp = order_item[1:]
-                parsed_order_data.append(getattr(cls.model(), order_item_tmp).desc())
-            else:
-                parsed_order_data.append(getattr(cls.model(), order_item_tmp).asc())
 
-        return tuple(parsed_order_data)
+class SecurityConfig:
+    """Security configuration constants and patterns"""
 
-    @classmethod
-    def _parse_order_data_for_target(cls, target: Base, order_data: Optional[Tuple[str]] = None) -> tuple:
-        if not order_data:
-            order_data = ()  # type: ignore
-        parsed_order_data = []
+    MAX_FILTER_COMPLEXITY = 50
+    MAX_STRING_LENGTH = 5000
+    MAX_LIST_LENGTH = 500
+    KEY_MAX_LENGTH = 50
+    DANGEROUS_STRINGS = [";", "--", "/*", "*/", "xp_", "sp_"]
+    ALLOWED_ORDER_PATTERN = re.compile(r"^-?[a-zA-Z_][a-zA-Z0-9_]*$")
+    ALLOWED_KEY_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
-        for order_item in order_data:  # type: ignore
-            order_item_tmp = order_item
-            if order_item_tmp.startswith("-"):
-                order_item_tmp = order_item[1:]
-                parsed_order_data.append(getattr(target, order_item_tmp).desc())
-            else:
-                parsed_order_data.append(getattr(target, order_item_tmp).asc())
 
-        return tuple(parsed_order_data)
+class FilterKeyParser:
+    """Handles parsing of filter keys with lookup operations"""
+
+    ATTRIBUTE_SEPARATOR = "__"
 
     @classmethod
-    def _apply_where(cls, stmt: Any, filter_data: dict) -> Any:
+    def parse(cls, key: str) -> Tuple[str, str, str]:
+        """
+        Parse filter key into components.
+
+        Returns:
+            Tuple[column_name, jsonb_field, lookup_operation]
+
+        Examples:
+            "name" -> ("name", "", "e")
+            "name__ilike" -> ("name", "", "ilike")
+            "meta__preferences__jsonb_like" -> ("meta", "preferences", "jsonb_like")
+        """
+        parts = key.split(cls.ATTRIBUTE_SEPARATOR)
+
+        if len(parts) == 1:
+            return parts[0], "", "e"
+        elif len(parts) == 2:
+            return parts[0], "", parts[1]
+        elif len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+        else:
+            raise RepositoryError(f"Invalid filter key format: '{key}'. Too many separators.")
+
+
+class SecurityValidator:
+    """Handles all security validation for query building"""
+
+    @classmethod
+    def validate_filter_complexity(cls, filter_data: Dict[str, Any]) -> None:
+        """Validate filter complexity to prevent DoS attacks"""
+        if len(filter_data) > SecurityConfig.MAX_FILTER_COMPLEXITY:
+            raise RepositoryError(
+                f"Filter complexity exceeds maximum allowed ({SecurityConfig.MAX_FILTER_COMPLEXITY})"
+            )
+
+    @classmethod
+    def validate_key_security(cls, key: str) -> None:
+        """Validate filter key for security"""
+        if len(key) > SecurityConfig.KEY_MAX_LENGTH:
+            raise RepositoryError(f"Key too long. Maximum {SecurityConfig.KEY_MAX_LENGTH} characters allowed.")
+
+        if not SecurityConfig.ALLOWED_KEY_PATTERN.match(str(key)):
+            raise RepositoryError(
+                f"Invalid key format: '{key}'. Only alphanumeric characters and underscores allowed."
+            )
+
+        # Check for potentially dangerous characters
+        if any(char in key for char in SecurityConfig.DANGEROUS_STRINGS):
+            raise RepositoryError(f"Key contains dangerous characters: '{key}'")
+
+    @classmethod
+    def validate_value_security(cls, value: Any) -> None:
+        """Validate filter value for security"""
+        if isinstance(value, str):
+            if len(value) > SecurityConfig.MAX_STRING_LENGTH:
+                raise RepositoryError(
+                    f"String value too long. Maximum {SecurityConfig.MAX_STRING_LENGTH} characters allowed."
+                )
+        elif isinstance(value, (list, tuple)):
+            if len(value) > SecurityConfig.MAX_LIST_LENGTH:
+                raise RepositoryError(
+                    f"List value too long. Maximum {SecurityConfig.MAX_LIST_LENGTH} items allowed."
+                )
+            for item in value:
+                cls.validate_value_security(item)
+
+    @classmethod
+    def validate_order_field(cls, order_field: str) -> None:
+        """Validate order field for security"""
+        if not SecurityConfig.ALLOWED_ORDER_PATTERN.match(order_field):
+            raise RepositoryError(
+                f"Invalid order field format: '{order_field}'. "
+                f"Only alphanumeric characters, underscores, and optional leading dash allowed."
+            )
+
+        if len(order_field) > SecurityConfig.KEY_MAX_LENGTH:
+            raise RepositoryError(
+                f"Order field too long. Maximum {SecurityConfig.KEY_MAX_LENGTH} characters allowed."
+            )
+
+
+class TypeValidator:
+    """Handles type validation for different column types"""
+
+    TYPE_VALIDATORS = {
+        String: "_validate_string_type",
+        Integer: "_validate_integer_type",
+        Float: "_validate_float_type",
+        Boolean: "_validate_boolean_type",
+        DateTime: "_validate_datetime_type",
+        JSON: "_validate_json_type",
+    }
+
+    @classmethod
+    def validate_value_type(cls, key: str, value: Any, column_type: Any) -> None:
+        """Validate a single value against column type"""
+        for type_class, validator_method in cls.TYPE_VALIDATORS.items():
+            if isinstance(column_type, type_class):
+                getattr(cls, validator_method)(key, value)
+                return
+
+    @classmethod
+    def _validate_string_type(cls, key: str, value: Any) -> None:
+        """Validate string type value"""
+        if not isinstance(value, str):
+            raise RepositoryError(f"Column '{key}' expects string value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_integer_type(cls, key: str, value: Any) -> None:
+        """Validate integer type value"""
+        if not isinstance(value, int):
+            raise RepositoryError(f"Column '{key}' expects integer value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_float_type(cls, key: str, value: Any) -> None:
+        """Validate float type value"""
+        if not isinstance(value, (int, float)):
+            raise RepositoryError(f"Column '{key}' expects numeric value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_boolean_type(cls, key: str, value: Any) -> None:
+        """Validate boolean type value"""
+        if not isinstance(value, bool):
+            raise RepositoryError(f"Column '{key}' expects boolean value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_datetime_type(cls, key: str, value: Any) -> None:
+        """Validate datetime type value"""
+
+        if not isinstance(value, datetime):
+            raise RepositoryError(f"Column '{key}' expects datetime value, got {type(value).__name__}")
+
+    @classmethod
+    def _validate_json_type(cls, key: str, value: Any) -> None:
+        """Validate JSON type value"""
+        if not isinstance(value, (dict, list, str, int, float, bool)):
+            raise RepositoryError(f"Column '{key}' expects JSON-compatible value, got {type(value).__name__}")
+
+
+# ==========================================
+# MAIN QUERY BUILDER CLASS
+# ==========================================
+
+
+class QueryBuilder:
+    """
+    Main query builder class responsible for constructing SQL queries with security validations.
+
+    This class is organized into logical sections:
+    - Configuration and Setup
+    - Column Management
+    - Filter Processing
+    - Ordering and Pagination
+    - Validation Orchestration
+    """
+
+    # ==========================================
+    # CONFIGURATION
+    # ==========================================
+
+    LOOKUP_REGISTRY_CLASS = PSQLLookupRegistry
+    PAGINATION_KEYS = ["limit", "offset"]
+    _MODEL_COLUMNS_CACHE: Dict[str, Dict[str, Column]] = {}
+
+    # ==========================================
+    # CORE QUERY BUILDING METHODS
+    # ==========================================
+
+    @classmethod
+    def lookup_registry(cls) -> Type[PSQLLookupRegistry]:
+        """Get the lookup registry for SQL operations"""
+        return cls.LOOKUP_REGISTRY_CLASS
+
+    @classmethod
+    def _get_model_columns(cls, model_class: Type[Base]) -> Dict[str, Column]:
+        """Get all columns from the model with caching"""
+        model_name = model_class.__name__
+
+        if model_name not in cls._MODEL_COLUMNS_CACHE:
+            inspector = inspect(model_class)
+            cls._MODEL_COLUMNS_CACHE[model_name] = {col.name: col for col in inspector.columns}
+
+        return cls._MODEL_COLUMNS_CACHE[model_name]
+
+    @classmethod
+    def validate_model_key(cls, key: str, model_class: Type[Base]) -> Column:
+        """Validate that a key exists in the model and return the column"""
+        column_ = cls._get_model_columns(model_class).get(key, None)
+        if column_ is None:
+            raise RepositoryError(f"Column '{key}' does not exist in model {model_class.__name__}")
+        return column_
+
+    # ==========================================
+    # FILTER VALIDATION METHODS
+    # ==========================================
+
+    @classmethod
+    def validate_filter_value(cls, column: Column, key: str, value: Any, lookup: str) -> None:
+        """
+        Comprehensive validation of filter values.
+
+        Validates:
+        - None values against nullable columns
+        - Security constraints
+        - Type compatibility
+        - Lookup-specific requirements
+        """
+        # Check nullable constraints
+        if cls._is_none_value_invalid(column, value):
+            raise RepositoryError(f"Column '{key}' cannot be None (not nullable)")
+
+        if value is None:
+            return  # None is valid for nullable columns
+
+        # Security validation
+        SecurityValidator.validate_value_security(value)
+
+        # Lookup-specific validation
+        if cls._is_list_based_lookup(lookup):
+            cls._validate_list_lookup_values(key, value, column.type)
+        elif cls._is_string_convertible_lookup(lookup):
+            cls._validate_string_convertible_lookup(key, value, lookup)
+        else:
+            # Type validation for single values
+            TypeValidator.validate_value_type(key, value, column.type)
+
+    @classmethod
+    def _is_none_value_invalid(cls, column: Column, value: Any) -> bool:
+        """Check if None value is invalid for the column"""
+        return value is None and not column.nullable
+
+    @classmethod
+    def _is_list_based_lookup(cls, lookup: str) -> bool:
+        """Check if lookup requires list/tuple values"""
+        return lookup in ("in", "not_in")
+
+    @classmethod
+    def _is_string_convertible_lookup(cls, lookup: str) -> bool:
+        """Check if lookup converts values to strings"""
+        return lookup in ("not_like_all", "like", "jsonb_like", "jsonb_not_like", "ilike")
+
+    @classmethod
+    def _validate_list_lookup_values(cls, key: str, value: Any, column_type: Any) -> None:
+        """Validate values for list-based lookups (IN, NOT IN)"""
+        if not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"List-based lookup for column '{key}' requires list/tuple value")
+
+        # Validate each item in the list
+        for item in value:
+            if item is not None:
+                TypeValidator.validate_value_type(key, item, column_type)
+
+    @classmethod
+    def _validate_string_convertible_lookup(cls, key: str, value: Any, lookup: str) -> None:
+        """Validate values for string-convertible lookups (LIKE, ILIKE, etc.)"""
+        if lookup == "not_like_all" and not isinstance(value, (list, tuple)):
+            raise RepositoryError(f"Lookup 'not_like_all' for column '{key}' requires list/tuple value")
+
+    # ==========================================
+    # MAIN QUERY PROCESSING METHODS
+    # ==========================================
+
+    @classmethod
+    def apply_where(cls, stmt: Any, filter_data: Optional[Dict[str, Any]], model_class: Type[Base]) -> Any:
+        """
+        Apply WHERE clauses to a SQL statement based on filter data.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            filter_data: Dictionary of filter conditions
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            Modified SQLAlchemy statement with WHERE clauses applied
+        """
+        if not filter_data:
+            return stmt
+
+        # Security validation
+        SecurityValidator.validate_filter_complexity(filter_data)
+
+        # Process each filter
         for key, value in filter_data.items():
-            key_1, key_2, lookup = cls._parse_filter_key(key)
-            key_1_ = getattr(cls.model(), key_1, None)
-            key_2_ = key_2
-            if "jsonb" in lookup and key_2:
-                key_1_ = key_1
-                key_2_ = key_2
-            stmt = cls.LOOKUP_MAP[lookup](stmt, key_1_, key_2_, value)
+            if key in cls.PAGINATION_KEYS:
+                continue
+
+            # Parse and validate the filter key
+            column_name, jsonb_field, lookup = FilterKeyParser.parse(key)
+
+            # Security validation
+            SecurityValidator.validate_key_security(column_name)
+            if jsonb_field:
+                SecurityValidator.validate_key_security(jsonb_field)
+
+            # Validate column exists and get column object
+            column = cls.validate_model_key(column_name, model_class)
+
+            # Comprehensive value validation
+            cls.validate_filter_value(column, key, value, lookup)
+
+            # Apply the lookup operation
+            stmt = cls.lookup_registry().apply_lookup(
+                stmt=stmt, column=column, lookup=lookup, value=value, jsonb_field=jsonb_field
+            )
+
         return stmt
 
     @classmethod
-    def model(cls) -> Type[BaseModel]:
-        if not cls.MODEL:
-            raise AttributeError
-        return cls.MODEL
+    def apply_ordering(cls, stmt: Any, order_data: Optional[Tuple[str, ...]], model_class: Type[Base]) -> Any:
+        """
+        Apply ORDER BY clause to statement.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            order_data: Tuple of field names for ordering (prefix with "-" for DESC)
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            Modified SQLAlchemy statement with ORDER BY clause applied
+        """
+        if not order_data:
+            return stmt
+
+        try:
+            parsed_order = cls._parse_order_data(order_data, model_class)
+            return stmt.order_by(*parsed_order)
+        except Exception as e:
+            raise RepositoryError(f"Failed to apply ordering: {str(e)}")
 
     @classmethod
-    def __make_out_dataclass(cls) -> Tuple[Callable, List[str]]:
+    def apply_pagination(cls, stmt: Any, filter_data: Optional[Dict[str, Any]] = None) -> Any:
+        """
+        Apply LIMIT and OFFSET to statement for pagination.
+
+        Args:
+            stmt: SQLAlchemy statement to modify
+            filter_data: Dictionary containing "limit" and "offset" keys
+
+        Returns:
+            Modified SQLAlchemy statement with pagination applied
+        """
+        if not filter_data:
+            return stmt
+
+        # Extract and validate pagination parameters
+        limit = filter_data.get("limit")
+        offset = filter_data.get("offset", 0)
+
+        # Apply offset if provided
+        if offset:
+            if not isinstance(offset, int) or offset < 0:
+                raise RepositoryError(f"Offset must be non-negative integer, got: {offset}")
+            stmt = stmt.offset(offset)
+
+        # Apply limit if provided
+        if limit is not None:
+            if not isinstance(limit, int) or limit <= 0:
+                raise RepositoryError(f"Limit must be positive integer, got: {limit}")
+            stmt = stmt.limit(limit)
+
+        return stmt
+
+    # ==========================================
+    # HELPER METHODS
+    # ==========================================
+
+    @classmethod
+    def _parse_order_data(cls, order_data: Tuple[str, ...], model_class: Type[Base]) -> List[Any]:
+        """
+        Parse order data into SQLAlchemy order clauses.
+
+        Args:
+            order_data: Tuple of field names, optionally prefixed with "-" for descending order
+            model_class: SQLAlchemy model class for validation
+
+        Returns:
+            List of SQLAlchemy order clauses
+
+        Example:
+            ("name", "-created_at") -> [Column.asc(), Column.desc()]
+        """
+        parsed_order = []
+
+        for order_item in order_data:
+            if not isinstance(order_item, str):
+                raise RepositoryError(f"Order field must be string, got: {type(order_item).__name__}")
+
+            # Security validation
+            SecurityValidator.validate_order_field(order_item)
+
+            # Parse direction and field name
+            if order_item.startswith("-"):
+                field_name = order_item[1:]
+                direction = "desc"
+            else:
+                field_name = order_item
+                direction = "asc"
+
+            # Validate field exists in model and create order clause
+            try:
+                column = cls.validate_model_key(field_name, model_class)
+                parsed_order.append(getattr(column, direction)())
+            except Exception as e:
+                raise RepositoryError(f"Invalid order field '{field_name}': {str(e)}")
+
+        return parsed_order
+
+
+class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+    """
+    Base PostgreSQL repository with CRUD operations and bulk operations support.
+
+    Organized into logical sections:
+    - Configuration and Setup
+    - Dataclass Helpers
+    - Read Operations
+    - Write Operations
+    - Bulk Operations
+    - Utility Methods
+    """
+
+    MODEL: Optional[Type[Base]] = None
+    _QUERY_BUILDER_CLASS: Type[QueryBuilder] = QueryBuilder
+
+    # ==========================================
+    # CONFIGURATION AND SETUP
+    # ==========================================
+
+    @classmethod
+    def query_builder(cls) -> Type[QueryBuilder]:
+        """Get the query builder class for this repository"""
+        if not cls._QUERY_BUILDER_CLASS:
+            raise AttributeError("Query builder class not configured")
+        return cls._QUERY_BUILDER_CLASS
+
+    @classmethod
+    def model(cls) -> Type[BaseModel]:
+        """Get the SQLAlchemy model class for this repository"""
+        if not cls.MODEL:
+            raise AttributeError("Model class not configured")
+        return cls.MODEL
+
+    # ==========================================
+    # DATACLASS HELPERS
+    # ==========================================
+
+    @classmethod
+    def _create_dynamic_dataclass(cls) -> Tuple[Callable, List[str]]:
+        """Create a dynamic dataclass from the model structure"""
         model = cls.model()  # type: ignore
         columns = inspect(model).c
         field_names = [column.name for column in columns]
@@ -146,25 +655,29 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     def out_dataclass_with_columns(
         cls, out_dataclass: Optional[OuterGenericType] = None
     ) -> Tuple[Callable, List[str]]:
+        """Get output dataclass and column names for result conversion"""
         if not out_dataclass:
-            out_dataclass_, columns = cls.__make_out_dataclass()
+            out_dataclass_, columns = cls._create_dynamic_dataclass()
         else:
             out_dataclass_ = out_dataclass  # type: ignore
             columns = [f.name for f in fields(out_dataclass_)]  # type: ignore
 
         return out_dataclass_, columns
 
+    # ==========================================
+    # CRUD OPERATIONS
+    # ==========================================
+
     @classmethod
     async def count(cls, filter_data: Optional[dict] = None) -> int:
+        """Count records matching the filter criteria"""
         if not filter_data:
             filter_data = {}
 
-        filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
+        filter_data_ = filter_data.copy() if filter_data else {}
 
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -172,13 +685,11 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def is_exists(cls, filter_data: dict) -> bool:
-
-        filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
+        """Check if any records exist matching the filter criteria"""
+        filter_data_ = filter_data.copy()
 
         stmt = select(exists(cls.model()))
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session() as session:
             result = await session.execute(stmt)
@@ -189,12 +700,11 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def get_first(
         cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
-        filter_data_ = deepcopy(filter_data)
-        filter_data_.pop("limit", "")
-        filter_data_.pop("offset", "")
+        """Get the first record matching the filter criteria"""
+        filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data_)
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -213,17 +723,15 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         order_data: Optional[Tuple[str]] = ("id",),
         out_dataclass: Optional[OuterGenericType] = None,
     ) -> List[OuterGenericType]:
+        """Get a list of records matching the filter criteria with pagination and ordering"""
         if not filter_data:
             filter_data = {}
-        limit = filter_data.pop("limit", None)
-        offset = filter_data.pop("offset", 0)
+        filter_data_ = filter_data.copy()
 
         stmt: Select = select(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
-        stmt = stmt.order_by(*cls._parse_order_data(order_data))
-        stmt = stmt.offset(offset)
-        if limit is not None:
-            stmt = stmt.limit(limit)
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
+        stmt = cls.query_builder().apply_ordering(stmt, order_data=order_data, model_class=cls.model())
+        stmt = cls.query_builder().apply_pagination(stmt, filter_data=filter_data_)
 
         async with get_session(expire_on_commit=True) as session:
             result = await session.execute(stmt)
@@ -241,6 +749,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def create(
         cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> OuterGenericType | None:
+        """Create a single record"""
         data_copy = data.copy()
 
         # Handle explicit ID if provided, otherwise let database auto-increment
@@ -275,9 +784,77 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return None
 
     @classmethod
+    async def update(
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
+    ) -> OuterGenericType | None:
+        """Update records matching the filter criteria"""
+        data_copy = data.copy()
+
+        stmt = update(cls.model())
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
+
+        cls._set_timestamps_on_update(items=[data_copy])
+
+        stmt = stmt.values(**data_copy)
+        stmt.execution_options(synchronize_session="fetch")
+
+        async with get_session(expire_on_commit=True) as session:
+            await session.execute(stmt)
+            await session.commit()
+
+        if is_return_require:
+            return await cls.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
+        return None
+
+    @classmethod
+    async def update_or_create(
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[OuterGenericType] = None,
+    ) -> OuterGenericType | None:
+        """Update existing record or create new one if not found"""
+        is_exists = await cls.is_exists(filter_data=filter_data)
+        if is_exists:
+            data_tmp = deepcopy(data)
+            data_tmp.pop("id", None)
+            data_tmp.pop("uuid", None)
+            item = await cls.update(
+                filter_data=filter_data,
+                data=data_tmp,
+                is_return_require=is_return_require,
+                out_dataclass=out_dataclass,
+            )
+            return item
+        else:
+            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
+            return item
+
+    @classmethod
+    async def remove(
+        cls,
+        filter_data: Dict[str, Any],
+    ) -> None:
+        """Delete records matching the filter criteria"""
+        if not filter_data:
+            filter_data = {}
+        stmt = delete(cls.model())
+        stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data, model_class=cls.model())
+
+        async with get_session() as session:
+            await session.execute(stmt)
+            await session.commit()
+
+    @classmethod
     async def create_bulk(
         cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
+        """Create multiple records in a single operation"""
         if not items:
             return []
 
@@ -285,9 +862,6 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
-
-        # Normalize data to handle mixed completeness
-        cls._normalize_bulk_data(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
             model_class = cls.model()  # type: ignore
@@ -314,36 +888,85 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return None
 
     @classmethod
-    async def update(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        data_copy = deepcopy(data)
+    async def update_bulk(
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
+    ) -> List[OuterGenericType] | None:
+        """Update multiple records in optimized bulk operation
 
-        stmt = update(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
+        Note: Currently uses 2 queries for returning case:
+        - Option 1: Keep current ORM approach (cleaner, 2 queries for returning)
+        - Option 2: Go back to raw SQL (1 query, but more complex)
+        - Option 3: Hybrid approach - use ORM for non-returning, raw SQL for returning
+        """
+        if not items:
+            return None
 
-        cls._set_timestamps_on_update(items=[data_copy])
+        items_copy = deepcopy(items)
 
-        stmt = stmt.values(**data_copy)
-        stmt.execution_options(synchronize_session="fetch")
+        cls._set_timestamps_on_update(items=items_copy)
 
         async with get_session(expire_on_commit=True) as session:
-            await session.execute(stmt)
-            await session.commit()
+            if is_return_require:
+                return await cls._bulk_update_with_returning(session, items_copy, out_dataclass)
+            else:
+                await cls._bulk_update_without_returning(session, items_copy)
+                return None
 
-        if is_return_require:
-            return await cls.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
-        return None
+    # ==========================================
+    # BULK OPERATION HELPERS
+    # ==========================================
+
+    @classmethod
+    async def _bulk_update_with_returning(
+        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
+    ) -> List[OuterGenericType]:
+        """Perform bulk update with RETURNING for result collection using ORM"""
+        if not items:
+            return []
+
+        model_class = cls.model()  # type: ignore
+
+        # Use SQLAlchemy's bulk_update_mappings with synchronize_session=False for performance
+        await session.execute(update(model_class), items, execution_options={"synchronize_session": False})
+        await session.commit()
+
+        # Get updated items by their IDs
+        updated_ids = [item["id"] for item in items if "id" in item]
+        if not updated_ids:
+            return []
+
+        # Query the updated records
+        stmt = select(model_class).where(model_class.id.in_(updated_ids))
+        result = await session.execute(stmt)
+        updated_records = result.scalars().all()
+
+        # Convert to output dataclass
+        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
+        updated_items = []
+
+        for record in updated_records:
+            entity_data = {c.key: getattr(record, c.key) for c in inspect(record).mapper.column_attrs}
+            updated_items.append(out_entity_(**entity_data))
+
+        return updated_items
+
+    @classmethod
+    async def _bulk_update_without_returning(cls, session: Any, items: List[dict]) -> None:
+        """Perform bulk update without RETURNING using SQLAlchemy's bulk operations"""
+        if not items:
+            return
+
+        model_class = cls.model()  # type: ignore
+
+        # Use SQLAlchemy's built-in bulk update method
+        await session.execute(update(model_class), items, execution_options={"synchronize_session": False})
+        await session.commit()
 
     @classmethod
     async def _update_single_with_returning(
         cls, session: Any, item_data: dict, out_entity_: Callable
     ) -> OuterGenericType | None:
-        """Update a single item and return the updated entity"""
+        """Update a single item and return the updated entity (legacy method)"""
         if "id" not in item_data:
             return None
 
@@ -366,36 +989,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             return out_entity_(**entity_data)
         return None
 
-    @classmethod
-    async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
-        if not items:
-            return None
-
-        items_copy = deepcopy(items)
-
-        cls._set_timestamps_on_update(items=items_copy)
-
-        async with get_session(expire_on_commit=True) as session:
-            if is_return_require:
-                return await cls._bulk_update_with_returning(session, items_copy, out_dataclass)
-            else:
-                await cls._bulk_update_without_returning(session, items_copy)
-                return None
-
-    @classmethod
-    def _set_timestamps_on_update(cls, items: List[dict]) -> None:
-        """Set updated_at on update"""
-        if hasattr(cls.model(), "updated_at"):
-            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-            for item in items:
-                if "updated_at" not in item:
-                    item["updated_at"] = dt_
+    # ==========================================
+    # UTILITY METHODS
+    # ==========================================
 
     @classmethod
     def _set_timestamps_on_create(cls, items: List[dict]) -> None:
-        """Set created_at, updated_at on create"""
+        """Set created_at, updated_at timestamps on create operations"""
         if hasattr(cls.model(), "updated_at") or hasattr(cls.model(), "created_at"):
             dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
             for item in items:
@@ -405,89 +1005,10 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                     item["created_at"] = dt_
 
     @classmethod
-    def _normalize_bulk_data(cls, items: List[dict]) -> None:
-        """Normalize bulk data to handle mixed field completeness"""
-        if not items:
-            return
-
-        # Get all unique keys from all items
-        all_keys: set[str] = set()
-        for item in items:
-            all_keys.update(item.keys())
-
-        # Get model column defaults and nullable info
-        model_class = cls.model()  # type: ignore
-        model_table = model_class.__table__  # type: ignore
-
-        # For each item, ensure it has all fields with appropriate defaults
-        for item in items:
-            for key in all_keys:
-                if key not in item:
-                    # Check if column exists in model
-                    if hasattr(model_class, key):
-                        column = getattr(model_table.c, key, None)
-                        if column is not None:
-                            # Only add explicit None if column is nullable and has no default
-                            if column.nullable and column.default is None and column.server_default is None:
-                                item[key] = None
-                            # Don't add anything for columns with defaults - let database handle it
-
-    @classmethod
-    async def _bulk_update_with_returning(
-        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType]:
-        """Perform bulk update with RETURNING for result collection"""
-        updated_items = []
-        out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
-
-        for item_data in items:
-            updated_item = await cls._update_single_with_returning(session, item_data, out_entity_)
-            if updated_item:
-                updated_items.append(updated_item)
-
-        await session.commit()
-        return updated_items
-
-    @classmethod
-    async def _bulk_update_without_returning(cls, session: Any, items: List[dict]) -> None:
-        """Perform bulk update without RETURNING for better performance"""
-        await session.execute(update(cls.model()), items)
-        await session.commit()
-
-    @classmethod
-    async def update_or_create(
-        cls,
-        filter_data: dict,
-        data: Dict[str, Any],
-        is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
-        is_exists = await cls.is_exists(filter_data=filter_data)
-        if is_exists:
-            data_tmp = deepcopy(data)
-            data_tmp.pop("id", None)
-            data_tmp.pop("uuid", None)
-            item = await cls.update(
-                filter_data=filter_data,
-                data=data_tmp,
-                is_return_require=is_return_require,
-                out_dataclass=out_dataclass,
-            )
-            return item
-        else:
-            item = await cls.create(data=data, is_return_require=is_return_require, out_dataclass=out_dataclass)
-            return item
-
-    @classmethod
-    async def remove(
-        cls,
-        filter_data: Dict[str, Any],
-    ) -> None:
-        if not filter_data:
-            filter_data = {}
-        stmt = delete(cls.model())
-        stmt = cls._apply_where(stmt, filter_data=filter_data)
-
-        async with get_session() as session:
-            await session.execute(stmt)
-            await session.commit()
+    def _set_timestamps_on_update(cls, items: List[dict]) -> None:
+        """Set updated_at timestamp on update operations"""
+        if hasattr(cls.model(), "updated_at"):
+            dt_ = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+            for item in items:
+                if "updated_at" not in item:
+                    item["updated_at"] = dt_
