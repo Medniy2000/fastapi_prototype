@@ -27,5 +27,5 @@ class DebugService(DebugServiceServicer):
 
     async def HealthCheck(self, request, context) -> pb2.HealthCheckResp:  # type: ignore
         is_healthy = await services_container.common_service.is_healthy()
-        status = "OK" if is_healthy else "NOT OK"
+        status = "SERVING" if is_healthy else "NOT_SERVING"
         return pb2.HealthCheckResp(status=status)  # type: ignore
