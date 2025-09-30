@@ -1,11 +1,13 @@
-from typing import Annotated, Dict
+from typing import Annotated
+
+from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse
 from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
-from fastapi import APIRouter, Body, Request
+
 from src.app.application.container import container as services_container
-from src.app.interfaces.api.v1.endpoints.debug.schemas.req_schemas import MessageReq
 from src.app.config.settings import settings
 from src.app.infrastructure.messaging.mq_client import mq_client
+from src.app.interfaces.api.v1.endpoints.debug.schemas.req_schemas import MessageReq
 
 router = APIRouter(prefix="/debug")
 
@@ -46,9 +48,6 @@ async def health_check(
     is_healthy = await services_container.common_service.is_healthy()
     status = "OK" if is_healthy else "NOT OK"
     status_code = HTTP_200_OK if is_healthy else HTTP_400_BAD_REQUEST
-    resp = JSONResponse(
-        content={"status": status},
-        status_code=status_code
-    )
+    resp = JSONResponse(content={"status": status}, status_code=status_code)
 
     return resp
