@@ -70,7 +70,6 @@ class SettingsBase(PydanticSettings):
     CONNECTIONS_POOL_RECYCLE: int = env.int("CONNECTIONS_POOL_RECYCLE", 3600)  # 1 hour in seconds
     CONNECTIONS_POOL_TIMEOUT: int = env.int("CONNECTIONS_POOL_TIMEOUT", 30)  # seconds
 
-
     # Redis Settings
     # --------------------------------------------------------------------------
     REDIS_URL = env.str("REDIS_URL", "")

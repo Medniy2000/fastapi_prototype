@@ -28,7 +28,6 @@ from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_sessio
 from src.app.infrastructure.repositories.base.abstract import (
     AbstractBaseRepository,
     OuterGenericType,
-    BaseModel,
     RepositoryError,
 )
 from src.app.infrastructure.utils.common import generate_str
@@ -624,7 +623,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return cls._QUERY_BUILDER_CLASS
 
     @classmethod
-    def model(cls) -> Type[BaseModel]:
+    def model(cls) -> Type[Base]:
         """Get the SQLAlchemy model class for this repository"""
         if not cls.MODEL:
             raise AttributeError("Model class not configured")
@@ -936,7 +935,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             return []
 
         # Query the updated records
-        stmt = select(model_class).where(model_class.id.in_(updated_ids))
+        stmt = select(model_class).where(model_class.id.in_(updated_ids))  # type: ignore[attr-defined]
         result = await session.execute(stmt)
         updated_records = result.scalars().all()
 

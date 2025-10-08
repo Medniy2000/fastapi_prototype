@@ -11,6 +11,7 @@ from src.app.config.settings import settings
 class Base(DeclarativeBase):
     pass
 
+
 CONNECTIONS_POOL_USE_LIFO: bool = True  # LIFO for better connection reuse
 DB_JIT_DISABLED: bool = True  # Disable JIT
 DB_ISOLATION_LEVEL: str = "READ COMMITTED"
