@@ -66,7 +66,9 @@ class SettingsBase(PydanticSettings):
     DB_URL_SYNC: str = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
     CONNECTIONS_POOL_MIN_SIZE: int = env.int("CONNECTIONS_POOL_MIN_SIZE", 5)
-    CONNECTIONS_POOL_MAX_OVERFLOW: int = env.int("CONNECTIONS_POOL_MAX_OVERFLOW", 25)
+    CONNECTIONS_POOL_MAX_OVERFLOW: int = env.int("CONNECTIONS_POOL_MAX_OVERFLOW", 35)
+    CONNECTIONS_POOL_RECYCLE: int = env.int("CONNECTIONS_POOL_RECYCLE", 3600)  # 1 hour in seconds
+    CONNECTIONS_POOL_TIMEOUT: int = env.int("CONNECTIONS_POOL_TIMEOUT", 30)  # seconds
 
     # Redis Settings
     # --------------------------------------------------------------------------

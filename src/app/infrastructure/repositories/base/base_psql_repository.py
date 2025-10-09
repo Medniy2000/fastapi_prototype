@@ -28,7 +28,6 @@ from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_sessio
 from src.app.infrastructure.repositories.base.abstract import (
     AbstractBaseRepository,
     OuterGenericType,
-    BaseModel,
     RepositoryError,
 )
 from src.app.infrastructure.utils.common import generate_str
@@ -624,7 +623,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         return cls._QUERY_BUILDER_CLASS
 
     @classmethod
-    def model(cls) -> Type[BaseModel]:
+    def model(cls) -> Type[Base]:
         """Get the SQLAlchemy model class for this repository"""
         if not cls.MODEL:
             raise AttributeError("Model class not configured")
@@ -679,7 +678,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         stmt: Select = select(func.count(cls.model().id))  # type: ignore
         stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
-        async with get_session(expire_on_commit=True) as session:
+        async with get_session(expire_on_commit=False) as session:
             result = await session.execute(stmt)
             return result.scalars().first()
 
@@ -706,7 +705,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         stmt: Select = select(cls.model())
         stmt = cls.query_builder().apply_where(stmt, filter_data=filter_data_, model_class=cls.model())
 
-        async with get_session(expire_on_commit=True) as session:
+        async with get_session(expire_on_commit=False) as session:
             result = await session.execute(stmt)
 
         raw = result.scalars().first()
@@ -733,7 +732,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         stmt = cls.query_builder().apply_ordering(stmt, order_data=order_data, model_class=cls.model())
         stmt = cls.query_builder().apply_pagination(stmt, filter_data=filter_data_)
 
-        async with get_session(expire_on_commit=True) as session:
+        async with get_session(expire_on_commit=False) as session:
             result = await session.execute(stmt)
 
         raw_items = result.scalars().all()
@@ -757,7 +756,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
         cls._set_timestamps_on_create(items=[data_copy])
 
-        async with get_session(expire_on_commit=True) as session:
+        async with get_session(expire_on_commit=False) as session:
             if is_return_require:
                 # Use RETURNING to get specific columns instead of the whole model
                 model_class = cls.model()  # type: ignore
@@ -802,7 +801,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         stmt = stmt.values(**data_copy)
         stmt.execution_options(synchronize_session="fetch")
 
-        async with get_session(expire_on_commit=True) as session:
+        async with get_session(expire_on_commit=False) as session:
             await session.execute(stmt)
             await session.commit()
 
@@ -863,15 +862,17 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         # Add timestamps to all items
         cls._set_timestamps_on_create(items=items_copy)
 
-        async with get_session(expire_on_commit=True) as session:
+        # No need to keep objects attached, we use RETURNING clause
+        async with get_session(expire_on_commit=False) as session:
             model_class = cls.model()  # type: ignore
             model_table = model_class.__table__  # type: ignore
             if is_return_require:
-                # Use RETURNING to get created records efficiently
+                # Use RETURNING to get created records efficiently in single query
                 stmt = insert(model_class).values(items_copy).returning(*model_table.columns.values())
                 result = await session.execute(stmt)
                 await session.commit()
 
+                # Process results immediately after commit, before session closes
                 raw_items = result.fetchall()
                 out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
                 created_items = []
@@ -891,12 +892,13 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
     async def update_bulk(
         cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
     ) -> List[OuterGenericType] | None:
-        """Update multiple records in optimized bulk operation
+        """
+        Update multiple records in optimized bulk operation.
 
-        Note: Currently uses 2 queries for returning case:
-        - Option 1: Keep current ORM approach (cleaner, 2 queries for returning)
-        - Option 2: Go back to raw SQL (1 query, but more complex)
-        - Option 3: Hybrid approach - use ORM for non-returning, raw SQL for returning
+        Performance notes:
+        - Uses expire_on_commit=False to avoid unnecessary object expiration
+        - When is_return_require=True: 2 queries (bulk update + select)
+        - When is_return_require=False: 1 query (bulk update only)
         """
         if not items:
             return None
@@ -905,7 +907,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
         cls._set_timestamps_on_update(items=items_copy)
 
-        async with get_session(expire_on_commit=True) as session:
+        # expire_on_commit=False for better performance, no ORM objects to track
+        async with get_session(expire_on_commit=False) as session:
             if is_return_require:
                 return await cls._bulk_update_with_returning(session, items_copy, out_dataclass)
             else:
@@ -936,7 +939,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
             return []
 
         # Query the updated records
-        stmt = select(model_class).where(model_class.id.in_(updated_ids))
+        stmt = select(model_class).where(model_class.id.in_(updated_ids))  # type: ignore[attr-defined]
         result = await session.execute(stmt)
         updated_records = result.scalars().all()
 
@@ -961,33 +964,6 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         # Use SQLAlchemy's built-in bulk update method
         await session.execute(update(model_class), items, execution_options={"synchronize_session": False})
         await session.commit()
-
-    @classmethod
-    async def _update_single_with_returning(
-        cls, session: Any, item_data: dict, out_entity_: Callable
-    ) -> OuterGenericType | None:
-        """Update a single item and return the updated entity (legacy method)"""
-        if "id" not in item_data:
-            return None
-
-        model_class = cls.model()  # type: ignore
-        model_table = model_class.__table__  # type: ignore
-
-        item_id = item_data.pop("id")
-        stmt = (
-            update(model_class)
-            .where(model_class.id == item_id)  # type: ignore
-            .values(**item_data)
-            .returning(*model_table.columns.values())
-        )
-        result = await session.execute(stmt)
-        raw = result.fetchone()
-        if raw:
-            # Convert Row to dict using column names
-            column_names = [col.name for col in model_table.columns.values()]
-            entity_data = dict(zip(column_names, raw))
-            return out_entity_(**entity_data)
-        return None
 
     # ==========================================
     # UTILITY METHODS
