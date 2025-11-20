@@ -66,4 +66,11 @@ def register_middleware(application: FastAPI) -> None:
         )
 
 
+def register_error_handlers(application: FastAPI) -> None:
+    # Register exception handlers (must be after app creation)
+    import src.app.interfaces.api.error_handlers  # noqa: F401, E402
+
+
 app = init_app()
+
+register_error_handlers(app)
