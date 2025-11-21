@@ -4,7 +4,9 @@ from passlib.context import CryptContext
 from src.app.domain.common.services.base import AbstractBaseDomainService
 
 
-class AuthDomainService(AbstractBaseDomainService):
+class DomainAuthService(AbstractBaseDomainService):
+    """Domain service for password operations."""
+
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     @classmethod

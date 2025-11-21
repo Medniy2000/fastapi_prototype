@@ -6,22 +6,22 @@ import src
 
 class ApplicationServicesContainer:
     @property
-    def users_service(self) -> Type["src.app.application.services.users_service.UserService"]:
-        from src.app.application.services.users_service import UserService
+    def users_service(self) -> Type["src.app.application.services.users_service.AppUserService"]:
+        from src.app.application.services.users_service import AppUserService
 
-        return UserService
-
-    @property
-    def auth_service(self) -> Type["src.app.application.services.auth_service.AuthService"]:
-        from src.app.application.services.auth_service import AuthService
-
-        return AuthService
+        return AppUserService
 
     @property
-    def common_service(self) -> Type["src.app.application.services.common_service.CommonApplicationService"]:
-        from src.app.application.services.common_service import CommonApplicationService
+    def auth_service(self) -> Type["src.app.application.services.auth_service.AppUserService"]:
+        from src.app.application.services.auth_service import AppUserService
 
-        return CommonApplicationService
+        return AppUserService
+
+    @property
+    def common_service(self) -> Type["src.app.application.services.common_service.AppCommonService"]:
+        from src.app.application.services.common_service import AppCommonService
+
+        return AppCommonService
 
 
 container = ApplicationServicesContainer()

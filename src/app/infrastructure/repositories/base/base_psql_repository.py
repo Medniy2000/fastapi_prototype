@@ -30,7 +30,7 @@ from src.app.infrastructure.repositories.base.abstract import (
     OuterGenericType,
     RepositoryError,
 )
-from src.app.infrastructure.utils.common import generate_str
+from src.app.domain.common.utils.common import generate_str
 
 
 class PSQLLookupRegistry:

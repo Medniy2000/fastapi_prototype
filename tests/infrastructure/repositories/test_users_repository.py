@@ -7,7 +7,7 @@ from typing import Any, List, Type
 import pytest
 
 from src.app.infrastructure.repositories.base.abstract import RepositoryError
-from src.app.infrastructure.utils.common import generate_str
+from src.app.domain.common.utils.common import generate_str
 from src.app.infrastructure.repositories.container import container as repo_container
 from tests.domain.users.aggregates.common import UserTestAggregate
 from tests.fixtures.constants import USERS

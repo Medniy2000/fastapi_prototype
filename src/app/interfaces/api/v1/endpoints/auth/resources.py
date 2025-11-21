@@ -3,12 +3,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
 
+from src.app.application.container import container as app_svc_container
 from src.app.interfaces.api.core.dependencies import validate_api_key
-from src.app.interfaces.api.core.jwt import JWTHelper
 from src.app.interfaces.api.v1.endpoints.auth.schemas.req_schemas import SignUpReq
 from src.app.interfaces.api.v1.endpoints.auth.schemas.req_schemas import TokenReq
-from src.app.interfaces.api.v1.endpoints.auth.schemas.resp_schemas import SignupResp, TokenResp
-from src.app.application.container import container as services_container
+from src.app.interfaces.api.v1.endpoints.auth.schemas.resp_schemas import SignupResp
+from src.app.interfaces.api.v1.endpoints.auth.schemas.resp_schemas import TokenResp
 
 router = APIRouter(prefix="/auth")
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/auth")
 @router.post(path="/sign-up/", response_model=SignupResp, name="sign-up")
 async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
 
-    user = await services_container.auth_service.create_auth_user(data=data.model_dump())
+    user = await app_svc_container.auth_service.create_auth_user(data=data.model_dump())
 
     return asdict(user)
 
@@ -27,13 +27,15 @@ async def tokens(
 ) -> dict:
     """Get new access, refresh tokens [Based on email, password]"""
 
-    user = await services_container.auth_service.get_auth_user(email=data.email, password=data.password)
+    user = await app_svc_container.auth_service.get_auth_user_by_phone_number(
+        phone_number=data.phone_number, verification_code=data.verification_code
+    )
 
-    new_tokens = await JWTHelper.create_tokens_pair(uuid=str(user.uuid))  # noqa
+    token_pair = app_svc_container.auth_service.create_tokens_for_user(uuid=str(user.uuid))
     tokens_data = {
         "user_data": {"uuid": str(user.uuid)},
-        "access": new_tokens["access"],
-        "refresh": new_tokens["refresh"],
+        "access": token_pair.access_token,
+        "refresh": token_pair.refresh_token,
     }
 
     return tokens_data
@@ -43,13 +45,12 @@ async def tokens(
 async def tokens_refreshed(auth_api_key: str = Depends(validate_api_key)) -> dict:
     """Get new access, refresh tokens [Granted by refresh token in header]"""
 
-    refresh_data = await JWTHelper.refresh_auth_data(auth_api_key)
-    user = await services_container.users_service.get_first(filter_data={"uuid": refresh_data["uuid"]})
-    new_tokens = await JWTHelper.create_tokens_pair(uuid=str(getattr(user, "uuid", "")))
+    user, token_pair = await app_svc_container.auth_service.refresh_tokens(auth_api_key)
     tokens_data = {
         "user_data": {"uuid": str(getattr(user, "uuid", ""))},
-        "access": new_tokens["access"],
-        "refresh": new_tokens["refresh"],
+        "access": token_pair.access_token,
+        "refresh": token_pair.refresh_token,
     }
 
     return tokens_data
+
