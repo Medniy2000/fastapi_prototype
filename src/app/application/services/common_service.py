@@ -4,7 +4,7 @@ from src.app.application.common.services.base import AbstractBaseApplicationServ
 from loguru import logger
 
 
-class CommonApplicationService(AbstractBaseApplicationService):
+class AppCommonService(AbstractBaseApplicationService):
 
     @classmethod
     async def is_healthy(cls) -> bool:

@@ -5,7 +5,7 @@ from typing import List
 
 from dateutil.relativedelta import relativedelta
 
-from src.app.infrastructure.utils.common import generate_str
+from src.app.domain.common.utils.common import generate_str
 
 USER_CREATED_AT = dt.datetime.now(dt.UTC).replace(tzinfo=None) - relativedelta(months=6)
 USER_UPDATED_AT = USER_CREATED_AT
