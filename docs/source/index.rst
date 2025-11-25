@@ -10,3 +10,4 @@ Welcome to documentation!
    base_commands
    env_variables
    db_structure
+   ddd_concepts
