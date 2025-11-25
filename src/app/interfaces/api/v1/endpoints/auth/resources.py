@@ -16,12 +16,12 @@ router = APIRouter(prefix="/auth")
 @router.post(path="/sign-up/", response_model=SignupResp, name="sign-up")
 async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
 
-    user = await app_svc_container.users_service.create_user_by_email(
+    user_dto = await app_svc_container.users_service.create_user_by_email(
         email=data.email,
         password=data.password,
     )
-    assert user is not None
-    return asdict(user)
+    assert user_dto is not None
+    return asdict(user_dto)
 
 
 @router.post(path="/tokens/", response_model=TokenResp, name="tokens pair")
@@ -30,13 +30,13 @@ async def tokens(
 ) -> dict:
     """Get new access, refresh tokens [Based on email, password]"""
 
-    user = await app_svc_container.auth_service.get_auth_user_by_email_password(
+    user_dto = await app_svc_container.auth_service.get_auth_user_by_email_password(
         email=data.email, password=data.password
     )
 
-    token_pair = app_svc_container.auth_service.create_tokens_for_user(uuid=str(user.uuid))
+    token_pair = app_svc_container.auth_service.create_tokens_for_user(uuid=str(user_dto.uuid))
     tokens_data = {
-        "user_data": {"uuid": str(user.uuid)},
+        "user_data": {"uuid": str(user_dto.uuid)},
         "access": token_pair.access_token,
         "refresh": token_pair.refresh_token,
     }
@@ -48,9 +48,9 @@ async def tokens(
 async def tokens_refreshed(auth_api_key: str = Depends(validate_api_key)) -> dict:
     """Get new access, refresh tokens [Granted by refresh token in header]"""
 
-    user, token_pair = await app_svc_container.auth_service.refresh_tokens(auth_api_key)
+    user_dto, token_pair = await app_svc_container.auth_service.refresh_tokens(auth_api_key)
     tokens_data = {
-        "user_data": {"uuid": str(getattr(user, "uuid", ""))},
+        "user_data": {"uuid": str(getattr(user_dto, "uuid", ""))},
         "access": token_pair.access_token,
         "refresh": token_pair.refresh_token,
     }
