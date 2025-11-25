@@ -2,14 +2,16 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
-from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository
+from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, BaseOutEntity
 
 
 @dataclass
-class BaseSvcOutEntity(ABC):
+class BaseSvcOutEntity(BaseOutEntity):
     pass
 
+
 OutSvcGenericType = TypeVar("OutSvcGenericType", bound=BaseSvcOutEntity)
+
 
 class AbstractBaseApplicationService(ABC):
     pass
@@ -26,29 +28,29 @@ class AbstractApplicationService(AbstractBaseApplicationService, Generic[OutSvcG
 
     @classmethod
     async def get_first(
-            cls,
-            filter_data: dict,
-            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+        cls,
+        filter_data: dict,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def get_list(
         cls,
-            filter_data: dict,
-            offset: int = 0,
-            limit: Optional[int] = None,
-            order_data: Tuple[str] = ("id",),
-            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+        filter_data: dict,
+        offset: int = 0,
+        limit: Optional[int] = None,
+        order_data: Tuple[str] = ("id",),
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> List[OutSvcGenericType]:
         raise NotImplementedError
 
     @classmethod
     async def create(
-            cls,
-            data: dict,
-            is_return_require: bool = False,
-            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+        cls,
+        data: dict,
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
@@ -111,9 +113,9 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
 
     @classmethod
     async def get_first(
-            cls,
-            filter_data: dict,
-            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+        cls,
+        filter_data: dict,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         item = await cls.repository.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
         return item
@@ -132,21 +134,18 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
         if limit is not None:
             filter_data_["limit"] = limit
         return await cls.repository.get_list(
-            filter_data=filter_data_,
-            order_data=order_data,
-            out_dataclass=out_dataclass
+            filter_data=filter_data_, order_data=order_data, out_dataclass=out_dataclass
         )
 
     @classmethod
     async def create(
-            cls, data: dict,
-            is_return_require: bool = False,
-            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+        cls,
+        data: dict,
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         return await cls.repository.create(
-            data=data,
-            is_return_require=is_return_require,
-            out_dataclass=out_dataclass
+            data=data, is_return_require=is_return_require, out_dataclass=out_dataclass
         )
 
     @classmethod
@@ -157,9 +156,7 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
         out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> List[OutSvcGenericType] | None:
         return await cls.repository.create_bulk(
-            items=items,
-            is_return_require=is_return_require,
-            out_dataclass=out_dataclass
+            items=items, is_return_require=is_return_require, out_dataclass=out_dataclass
         )
 
     @classmethod
@@ -171,11 +168,7 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
         out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         return await cls.repository.update(
-            filter_data=filter_data,
-            data=data,
-            is_return_require=is_return_require,
-            out_dataclass=out_dataclass
-
+            filter_data=filter_data, data=data, is_return_require=is_return_require, out_dataclass=out_dataclass
         )
 
     @classmethod
@@ -186,9 +179,7 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
         out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> List[OutSvcGenericType] | None:
         return await cls.repository.update_bulk(
-            items=items,
-            is_return_require=is_return_require,
-            out_dataclass=out_dataclass
+            items=items, is_return_require=is_return_require, out_dataclass=out_dataclass
         )
 
     @classmethod
@@ -200,10 +191,7 @@ class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Gene
         out_dataclass: Optional[Type[OutSvcGenericType]] = None,
     ) -> OutSvcGenericType | None:
         return await cls.repository.update_or_create(
-            filter_data=filter_data,
-            data=data,
-            is_return_require=is_return_require,
-            out_dataclass=out_dataclass
+            filter_data=filter_data, data=data, is_return_require=is_return_require, out_dataclass=out_dataclass
         )
 
     @classmethod

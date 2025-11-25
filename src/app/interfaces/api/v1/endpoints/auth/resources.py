@@ -20,6 +20,7 @@ async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
         email=data.email,
         password=data.password,
     )
+    assert user is not None
     return asdict(user)
 
 
@@ -55,4 +56,3 @@ async def tokens_refreshed(auth_api_key: str = Depends(validate_api_key)) -> dic
     }
 
     return tokens_data
-

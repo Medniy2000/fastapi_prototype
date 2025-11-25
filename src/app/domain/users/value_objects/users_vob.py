@@ -12,7 +12,7 @@ class EmailPasswordPair:
     email: str
     password: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.__validate_email(value=self.email)
         self.__validate_password(value=self.password)
 
@@ -27,45 +27,30 @@ class EmailPasswordPair:
             {"key": "password", "value": mask_string(value, keep_start=1, keep_end=1)},
         ]
         if len(value) < 8:
-            raise ValidationError(
-                message="Must be at least 8 characters long",
-                details=details
-            )
+            raise ValidationError(message="Must be at least 8 characters long", details=details)
 
         # Check for at least one uppercase letter
         if not re.search(r"[A-Z]", value):
-            raise ValidationError(
-                message="Must contain at least one uppercase letter",
-                details=details
-            )
+            raise ValidationError(message="Must contain at least one uppercase letter", details=details)
 
         # Check for at least one lowercase letter
         if not re.search(r"[a-z]", value):
-            raise ValidationError(
-                message="Must contain at least one lowercase letter",
-                details=details
-            )
+            raise ValidationError(message="Must contain at least one lowercase letter", details=details)
 
         # Check for at least one digit
         if not re.search(r"[0-9]", value):
-            raise ValidationError(
-                message="Must contain at least one digit",
-                details=details
-            )
+            raise ValidationError(message="Must contain at least one digit", details=details)
 
         # Check for at least one special character
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
-            raise ValidationError(
-                message="Must contain at least one special character",
-                details=details
-            )
-
+            raise ValidationError(message="Must contain at least one special character", details=details)
 
     def to_dict(self) -> dict:
         return {
             "email": self.email,
             "password_hashed": self.password,
         }
+
 
 @dataclass(frozen=True)
 class PhoneNumberCodePair:
@@ -74,7 +59,7 @@ class PhoneNumberCodePair:
     phone: str
     verification_code: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.__validate_phone(value=self.phone)
         self.__validate_verification_code(value=self.verification_code)
 
@@ -85,7 +70,7 @@ class PhoneNumberCodePair:
         if not match or 8 > len(value) or len(value) > 16:
             raise ValidationError(
                 message="Invalid value",
-                details=[{"key": "phone", "value": mask_string(value, keep_start=2, keep_end=2)}]
+                details=[{"key": "phone", "value": mask_string(value, keep_start=2, keep_end=2)}],
             )
 
     pass

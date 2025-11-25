@@ -2,3 +2,5 @@
 exclude = .git,__pycache__, *env,.venv,*venv,migrations,logs,src/app/interfaces/grpc
 max-line-length = 115
 max-complexity = 8
+# E203: whitespace before ':' - conflicts with Black formatter
+extend-ignore = E203

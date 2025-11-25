@@ -20,7 +20,6 @@ class AppAuthService(AbstractBaseApplicationService):
     dom_users_svc_container: DomainUsersServiceContainer = domain_users_svc_container
     dom_auth_svc_container: DomainAuthServiceContainer = domain_auth_svc_container
 
-
     @classmethod
     async def get_auth_user_by_email_password(cls, email: str, password: str) -> Any:
         try:
@@ -65,8 +64,8 @@ class AppAuthService(AbstractBaseApplicationService):
         """Verify refresh token, get user, and create new token pair."""
         decoded = cls.verify_refresh_token(refresh_token)
         user = await cls.app_svc_container.users_service.get_first(
-            filter_data={"uuid": decoded.uuid},
-            out_dataclass=UserShortDTO
+            filter_data={"uuid": decoded.uuid}, out_dataclass=UserShortDTO
         )
-        new_tokens = cls.create_tokens_for_user(str(getattr(user, "uuid", "")))
+        assert user is not None
+        new_tokens = cls.create_tokens_for_user(str(user.uuid))
         return user, new_tokens

@@ -22,7 +22,7 @@ class BaseAggregate:
 
     def events_load(self, raw_events: List[dict]) -> List[DomainEvent]:
         """Get all domain events."""
-        pass
+        raise NotImplementedError("Subclasses must implement events_load method")
 
     def has_events(self) -> bool:
         """Check if aggregate has any events."""

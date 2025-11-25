@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import validate_email
 
 from src.app.application.common.services.base import BaseApplicationService
@@ -24,7 +26,7 @@ class AppUserService(BaseApplicationService):
     repository = repo_container.users_repository
 
     @classmethod
-    async def create_user_by_email(cls, email: str, password: str) -> UserShortDTO:
+    async def create_user_by_email(cls, email: str, password: str) -> Optional[UserShortDTO]:
         _, validated_email = validate_email(email)
         validated_data = EmailPasswordPair(email=validated_email, password=password)
         password_hashed = domain_auth_svc_container.auth_service.get_password_hashed(password=password)
@@ -43,12 +45,12 @@ class AppUserService(BaseApplicationService):
             "email": validated_data.email,
             "password_hashed": password_hashed,
         }
-        user_dto =  await cls.create(data, is_return_require=True, out_dataclass=UserShortDTO)
+        user_dto = await cls.create(data, is_return_require=True, out_dataclass=UserShortDTO)
+
         return user_dto
 
-
     @classmethod
-    async def create_user_by_phone(cls, phone: str, verification_code: str) -> UserShortDTO:
+    async def create_user_by_phone(cls, phone: str, verification_code: str) -> Optional[UserShortDTO]:
         validated_data = PhoneNumberCodePair(phone=phone, verification_code=verification_code)
         is_phone_exists = await cls.app_svc_container.users_service.is_exists(
             filter_data={"phone": validated_data.phone}

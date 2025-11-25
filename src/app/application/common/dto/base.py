@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
+from src.app.application.common.services.base import BaseSvcOutEntity
+
 
 @dataclass
-class AppBaseDTO:
+class AppBaseDTO(BaseSvcOutEntity):
     pass
