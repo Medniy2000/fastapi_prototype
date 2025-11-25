@@ -767,16 +767,14 @@ class BasePSQLRepository(AbstractBaseRepository[OutRepoGenericType], Generic[Out
                 raw = result.fetchone()
                 if raw:
                     out_entity_, out_cols = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
-                    # Convert Row to dict using column names
-                    entity_data = dict(
-                        zip(
-                            [
-                                col.name for col in model_table.columns.values()
-                            ],
-                            raw
-                        )
-                    )
-                    return out_entity_(**{k:v for k, v in entity_data.items() if k in out_cols})
+                    # Convert Row to dict using only needed columns (O(1) lookup with set)
+                    out_cols_set = set(out_cols)
+                    column_names = [col.name for col in model_table.columns.values()]
+                    return out_entity_(**{
+                        col_name: value
+                        for col_name, value in zip(column_names, raw)
+                        if col_name in out_cols_set
+                    })
             else:
                 if explicit_id_provided:
                     # For explicit ID, use insert statement to handle potential conflicts better
