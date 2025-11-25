@@ -4,9 +4,9 @@ from pydantic import validate_email
 
 from src.app.application.common.services.base import AbstractBaseApplicationService
 from src.app.application.container import container as app_services_container, ApplicationServicesContainer
+from src.app.application.dto.auth import DecodedTokenDTO, TokenPairDTO
 from src.app.application.dto.user import UserShortDTO
 from src.app.domain.auth.container import container as domain_auth_svc_container, DomainAuthServiceContainer
-from src.app.domain.auth.value_objects import TokenPair, DecodedToken
 from src.app.domain.common.exceptions import ValidationError
 from src.app.domain.common.utils.common import mask_string
 from src.app.domain.users.container import container as domain_users_svc_container, DomainUsersServiceContainer
@@ -45,22 +45,38 @@ class AppAuthService(AbstractBaseApplicationService):
         return user
 
     @classmethod
-    def verify_access_token(cls, token: str) -> DecodedToken:
+    def verify_access_token(cls, token: str) -> DecodedTokenDTO:
         """Verify an access token and return decoded data."""
-        return cls.dom_auth_svc_container.jwt_service.verify_access_token(token)
+        decoded_vo = cls.dom_auth_svc_container.jwt_service.verify_access_token(token)
+        return DecodedTokenDTO(
+            uuid=decoded_vo.uuid,
+            sid=decoded_vo.sid,
+            token_type=decoded_vo.token_type.value,
+            exp=decoded_vo.exp,
+        )
 
     @classmethod
-    def verify_refresh_token(cls, token: str) -> DecodedToken:
+    def verify_refresh_token(cls, token: str) -> DecodedTokenDTO:
         """Verify a refresh token and return decoded data."""
-        return cls.dom_auth_svc_container.jwt_service.verify_refresh_token(token)
+        decoded_vo = cls.dom_auth_svc_container.jwt_service.verify_refresh_token(token)
+        return DecodedTokenDTO(
+            uuid=decoded_vo.uuid,
+            sid=decoded_vo.sid,
+            token_type=decoded_vo.token_type.value,
+            exp=decoded_vo.exp,
+        )
 
     @classmethod
-    def create_tokens_for_user(cls, uuid: str) -> TokenPair:
+    def create_tokens_for_user(cls, uuid: str) -> TokenPairDTO:
         """Create access and refresh tokens for a user."""
-        return cls.dom_auth_svc_container.jwt_service.create_token_pair(uuid)
+        token_pair_vo = cls.dom_auth_svc_container.jwt_service.create_token_pair(uuid)
+        return TokenPairDTO(
+            access_token=token_pair_vo.access_token,
+            refresh_token=token_pair_vo.refresh_token,
+        )
 
     @classmethod
-    async def refresh_tokens(cls, refresh_token: str) -> tuple[UserShortDTO, TokenPair]:
+    async def refresh_tokens(cls, refresh_token: str) -> tuple[UserShortDTO, TokenPairDTO]:
         """Verify refresh token, get user, and create new token pair."""
         decoded = cls.verify_refresh_token(refresh_token)
         user = await cls.app_svc_container.users_service.get_first(
