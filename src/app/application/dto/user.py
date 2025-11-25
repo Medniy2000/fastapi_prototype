@@ -15,3 +15,19 @@ class UserShortDTO(AppBaseDTO):
     email: Optional[str]
     phone: Optional[str]
     is_active: bool
+
+
+@dataclass
+class CreateUserByEmailDTO(AppBaseDTO):
+    """DTO for creating user by email and password."""
+
+    email: str
+    password: str
+
+
+@dataclass
+class CreateUserByPhoneDTO(AppBaseDTO):
+    """DTO for creating user by phone and verification code."""
+
+    phone: str
+    verification_code: str
