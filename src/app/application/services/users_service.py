@@ -9,7 +9,7 @@ from src.app.domain.auth.container import container as domain_auth_svc_container
 from src.app.domain.common.exceptions import AlreadyExistsError
 from src.app.domain.common.utils.common import mask_string
 from src.app.domain.users.container import container as domain_users_svc_container, DomainUsersServiceContainer
-from src.app.domain.users.value_objects.users_vob import EmailPasswordPair, PhoneNumberCodePair
+from src.app.domain.users.value_objects.users_vo import EmailPasswordPair, PhoneNumberCodePair
 from src.app.infrastructure.repositories.container import container as repo_container
 
 
