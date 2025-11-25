@@ -12,10 +12,10 @@ class ApplicationServicesContainer:
         return AppUserService
 
     @property
-    def auth_service(self) -> Type["src.app.application.services.auth_service.AppUserService"]:
-        from src.app.application.services.auth_service import AppUserService
+    def auth_service(self) -> Type["src.app.application.services.auth_service.AppAuthService"]:
+        from src.app.application.services.auth_service import AppAuthService
 
-        return AppUserService
+        return AppAuthService
 
     @property
     def common_service(self) -> Type["src.app.application.services.common_service.AppCommonService"]:

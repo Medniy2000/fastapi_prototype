@@ -14,15 +14,15 @@ class AbstractRepository(ABC):
 
 
 @dataclass
-class BaseOutputEntity(ABC):
+class BaseOutEntity(ABC):
     pass
 
 
 BaseModel = TypeVar("BaseModel", bound=Base)
-OuterGenericType = TypeVar("OuterGenericType", bound=BaseOutputEntity)
+OutRepoGenericType = TypeVar("OutRepoGenericType", bound=BaseOutEntity)
 
 
-class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
+class AbstractBaseRepository(AbstractRepository, Generic[OutRepoGenericType]):
     MODEL: Optional[Type[Base]] = None
 
     @classmethod
@@ -35,26 +35,26 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
 
     @classmethod
     async def get_first(
-        cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
+        cls, filter_data: dict, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> OutRepoGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def get_list(
-        cls, filter_data: dict, order_data: Tuple[str] = ("id",), out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType]:
+        cls, filter_data: dict, order_data: Tuple[str] = ("id",), out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType]:
         raise NotImplementedError
 
     @classmethod
     async def create(
-        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
+        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> OutRepoGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -63,14 +63,14 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         filter_data: dict,
         data: Dict[str, Any],
         is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
+        out_dataclass: Optional[OutRepoGenericType] = None,
+    ) -> OutRepoGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType] | None:
         raise NotImplementedError
 
     @classmethod
@@ -79,8 +79,8 @@ class AbstractBaseRepository(AbstractRepository, Generic[OuterGenericType]):
         filter_data: dict,
         data: Dict[str, Any],
         is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
+        out_dataclass: Optional[OutRepoGenericType] = None,
+    ) -> OutRepoGenericType | None:
         raise NotImplementedError
 
     @classmethod

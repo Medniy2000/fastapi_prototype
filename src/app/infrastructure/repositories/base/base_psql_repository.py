@@ -27,7 +27,7 @@ from sqlalchemy import (
 from src.app.infrastructure.extensions.psql_ext.psql_ext import Base, get_session
 from src.app.infrastructure.repositories.base.abstract import (
     AbstractBaseRepository,
-    OuterGenericType,
+    OutRepoGenericType,
     RepositoryError,
 )
 from src.app.domain.common.utils.common import generate_str
@@ -595,7 +595,7 @@ class QueryBuilder:
         return parsed_order
 
 
-class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[OuterGenericType]):
+class BasePSQLRepository(AbstractBaseRepository[OutRepoGenericType], Generic[OutRepoGenericType]):
     """
     Base PostgreSQL repository with CRUD operations and bulk operations support.
 
@@ -652,7 +652,7 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     def out_dataclass_with_columns(
-        cls, out_dataclass: Optional[OuterGenericType] = None
+        cls, out_dataclass: Optional[OutRepoGenericType] = None
     ) -> Tuple[Callable, List[str]]:
         """Get output dataclass and column names for result conversion"""
         if not out_dataclass:
@@ -697,8 +697,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def get_first(
-        cls, filter_data: dict, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
+        cls, filter_data: dict, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> OutRepoGenericType | None:
         """Get the first record matching the filter criteria"""
         filter_data_ = filter_data.copy()
 
@@ -720,8 +720,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         cls,
         filter_data: Optional[dict] = None,
         order_data: Optional[Tuple[str]] = ("id",),
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> List[OuterGenericType]:
+        out_dataclass: Optional[OutRepoGenericType] = None,
+    ) -> List[OutRepoGenericType]:
         """Get a list of records matching the filter criteria with pagination and ordering"""
         if not filter_data:
             filter_data = {}
@@ -746,8 +746,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def create(
-        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> OuterGenericType | None:
+        cls, data: dict, is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> OutRepoGenericType | None:
         """Create a single record"""
         data_copy = data.copy()
 
@@ -766,10 +766,17 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
                 await session.commit()
                 raw = result.fetchone()
                 if raw:
-                    out_entity_, _ = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
+                    out_entity_, out_cols = cls.out_dataclass_with_columns(out_dataclass=out_dataclass)
                     # Convert Row to dict using column names
-                    entity_data = dict(zip([col.name for col in model_table.columns.values()], raw))
-                    return out_entity_(**entity_data)
+                    entity_data = dict(
+                        zip(
+                            [
+                                col.name for col in model_table.columns.values()
+                            ],
+                            raw
+                        )
+                    )
+                    return out_entity_(**{k:v for k, v in entity_data.items() if k in out_cols})
             else:
                 if explicit_id_provided:
                     # For explicit ID, use insert statement to handle potential conflicts better
@@ -788,8 +795,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data: dict,
         data: Dict[str, Any],
         is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
+        out_dataclass: Optional[OutRepoGenericType] = None,
+    ) -> OutRepoGenericType | None:
         """Update records matching the filter criteria"""
         data_copy = data.copy()
 
@@ -815,8 +822,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
         filter_data: dict,
         data: Dict[str, Any],
         is_return_require: bool = False,
-        out_dataclass: Optional[OuterGenericType] = None,
-    ) -> OuterGenericType | None:
+        out_dataclass: Optional[OutRepoGenericType] = None,
+    ) -> OutRepoGenericType | None:
         """Update existing record or create new one if not found"""
         is_exists = await cls.is_exists(filter_data=filter_data)
         if is_exists:
@@ -851,8 +858,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType] | None:
         """Create multiple records in a single operation"""
         if not items:
             return []
@@ -890,8 +897,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType] | None:
+        cls, items: List[dict], is_return_require: bool = False, out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType] | None:
         """
         Update multiple records in optimized bulk operation.
 
@@ -921,8 +928,8 @@ class BasePSQLRepository(AbstractBaseRepository[OuterGenericType], Generic[Outer
 
     @classmethod
     async def _bulk_update_with_returning(
-        cls, session: Any, items: List[dict], out_dataclass: Optional[OuterGenericType] = None
-    ) -> List[OuterGenericType]:
+        cls, session: Any, items: List[dict], out_dataclass: Optional[OutRepoGenericType] = None
+    ) -> List[OutRepoGenericType]:
         """Perform bulk update with RETURNING for result collection using ORM"""
         if not items:
             return []

@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
+from src.app.domain.common.aggregates.base import BaseAggregate
+
 
 @dataclass
-class UserAggregate:
+class UserAggregate(BaseAggregate):
     id: int
     uuid: str
     meta: Dict[str, Any] | Any

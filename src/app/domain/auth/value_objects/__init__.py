@@ -1,4 +1,4 @@
-from src.app.domain.auth.value_objects.jwt import (
+from src.app.domain.auth.value_objects.jwt_vob import (
     TokenType,
     TokenPayload,
     TokenPair,

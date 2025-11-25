@@ -16,8 +16,10 @@ router = APIRouter(prefix="/auth")
 @router.post(path="/sign-up/", response_model=SignupResp, name="sign-up")
 async def sign_up(data: Annotated[SignUpReq, Body()]) -> dict:
 
-    user = await app_svc_container.auth_service.create_auth_user(data=data.model_dump())
-
+    user = await app_svc_container.users_service.create_user_by_email(
+        email=data.email,
+        password=data.password,
+    )
     return asdict(user)
 
 
@@ -27,8 +29,8 @@ async def tokens(
 ) -> dict:
     """Get new access, refresh tokens [Based on email, password]"""
 
-    user = await app_svc_container.auth_service.get_auth_user_by_phone_number(
-        phone_number=data.phone_number, verification_code=data.verification_code
+    user = await app_svc_container.auth_service.get_auth_user_by_email_password(
+        email=data.email, password=data.password
     )
 
     token_pair = app_svc_container.auth_service.create_tokens_for_user(uuid=str(user.uuid))

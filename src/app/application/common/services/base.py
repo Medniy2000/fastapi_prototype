@@ -1,14 +1,21 @@
 from abc import ABC
-from typing import Any, Dict, Generic, List, Optional, Tuple, Type
+from dataclasses import dataclass
+from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
-from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository, OuterGenericType
+from src.app.infrastructure.repositories.base.abstract import AbstractBaseRepository
 
+
+@dataclass
+class BaseSvcOutEntity(ABC):
+    pass
+
+OutSvcGenericType = TypeVar("OutSvcGenericType", bound=BaseSvcOutEntity)
 
 class AbstractBaseApplicationService(ABC):
     pass
 
 
-class AbstractApplicationService(AbstractBaseApplicationService, Generic[OuterGenericType]):
+class AbstractApplicationService(AbstractBaseApplicationService, Generic[OutSvcGenericType]):
     @classmethod
     async def count(cls, filter_data: dict) -> int:
         raise NotImplementedError
@@ -18,41 +25,69 @@ class AbstractApplicationService(AbstractBaseApplicationService, Generic[OuterGe
         raise NotImplementedError
 
     @classmethod
-    async def get_first(cls, filter_data: dict) -> OuterGenericType | None:
+    async def get_first(
+            cls,
+            filter_data: dict,
+            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def get_list(
-        cls, filter_data: dict, offset: int = 0, limit: Optional[int] = None, order_data: Tuple[str] = ("id",)
-    ) -> List[OuterGenericType]:
+        cls,
+            filter_data: dict,
+            offset: int = 0,
+            limit: Optional[int] = None,
+            order_data: Tuple[str] = ("id",),
+            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType]:
         raise NotImplementedError
 
     @classmethod
-    async def create(cls, data: dict, is_return_require: bool = False) -> OuterGenericType | None:
+    async def create(
+            cls,
+            data: dict,
+            is_return_require: bool = False,
+            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False
-    ) -> List[OuterGenericType] | None:
+        cls,
+        items: List[dict],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType] | None:
         raise NotImplementedError
 
     @classmethod
     async def update(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
-    ) -> OuterGenericType | None:
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
     @classmethod
     async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False
-    ) -> List[OuterGenericType] | None:
+        cls,
+        items: List[dict],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType] | None:
         raise NotImplementedError
 
     @classmethod
     async def update_or_create(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
-    ) -> OuterGenericType | None:
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
         raise NotImplementedError
 
     @classmethod
@@ -63,8 +98,8 @@ class AbstractApplicationService(AbstractBaseApplicationService, Generic[OuterGe
         raise NotImplementedError
 
 
-class BaseApplicationService(AbstractApplicationService[OuterGenericType], Generic[OuterGenericType]):
-    repository: Type[AbstractBaseRepository[OuterGenericType]]
+class BaseApplicationService(AbstractApplicationService[OutSvcGenericType], Generic[OutSvcGenericType]):
+    repository: Type[AbstractBaseRepository[OutSvcGenericType]]
 
     @classmethod
     async def count(cls, filter_data: dict) -> int:
@@ -75,48 +110,100 @@ class BaseApplicationService(AbstractApplicationService[OuterGenericType], Gener
         return await cls.repository.is_exists(filter_data=filter_data)
 
     @classmethod
-    async def get_first(cls, filter_data: dict) -> OuterGenericType | None:
-        item = await cls.repository.get_first(filter_data=filter_data)
+    async def get_first(
+            cls,
+            filter_data: dict,
+            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
+        item = await cls.repository.get_first(filter_data=filter_data, out_dataclass=out_dataclass)
         return item
 
     @classmethod
     async def get_list(
-        cls, filter_data: dict, offset: int = 0, limit: Optional[int] = None, order_data: Tuple[str] = ("id",)
-    ) -> List[OuterGenericType]:
+        cls,
+        filter_data: dict,
+        offset: int = 0,
+        limit: Optional[int] = None,
+        order_data: Tuple[str] = ("id",),
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType]:
         filter_data_ = filter_data.copy()
         filter_data_["offset"] = offset
         if limit is not None:
             filter_data_["limit"] = limit
-        return await cls.repository.get_list(filter_data=filter_data_, order_data=order_data)
+        return await cls.repository.get_list(
+            filter_data=filter_data_,
+            order_data=order_data,
+            out_dataclass=out_dataclass
+        )
 
     @classmethod
-    async def create(cls, data: dict, is_return_require: bool = False) -> OuterGenericType | None:
-        return await cls.repository.create(data=data, is_return_require=is_return_require)
+    async def create(
+            cls, data: dict,
+            is_return_require: bool = False,
+            out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
+        return await cls.repository.create(
+            data=data,
+            is_return_require=is_return_require,
+            out_dataclass=out_dataclass
+        )
 
     @classmethod
     async def create_bulk(
-        cls, items: List[dict], is_return_require: bool = False
-    ) -> List[OuterGenericType] | None:
-        return await cls.repository.create_bulk(items=items, is_return_require=is_return_require)
+        cls,
+        items: List[dict],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType] | None:
+        return await cls.repository.create_bulk(
+            items=items,
+            is_return_require=is_return_require,
+            out_dataclass=out_dataclass
+        )
 
     @classmethod
     async def update(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
-    ) -> OuterGenericType | None:
-        return await cls.repository.update(filter_data=filter_data, data=data, is_return_require=is_return_require)
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
+        return await cls.repository.update(
+            filter_data=filter_data,
+            data=data,
+            is_return_require=is_return_require,
+            out_dataclass=out_dataclass
+
+        )
 
     @classmethod
     async def update_bulk(
-        cls, items: List[dict], is_return_require: bool = False
-    ) -> List[OuterGenericType] | None:
-        return await cls.repository.update_bulk(items=items, is_return_require=is_return_require)
+        cls,
+        items: List[dict],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> List[OutSvcGenericType] | None:
+        return await cls.repository.update_bulk(
+            items=items,
+            is_return_require=is_return_require,
+            out_dataclass=out_dataclass
+        )
 
     @classmethod
     async def update_or_create(
-        cls, filter_data: dict, data: Dict[str, Any], is_return_require: bool = False
-    ) -> OuterGenericType | None:
+        cls,
+        filter_data: dict,
+        data: Dict[str, Any],
+        is_return_require: bool = False,
+        out_dataclass: Optional[Type[OutSvcGenericType]] = None,
+    ) -> OutSvcGenericType | None:
         return await cls.repository.update_or_create(
-            filter_data=filter_data, data=data, is_return_require=is_return_require
+            filter_data=filter_data,
+            data=data,
+            is_return_require=is_return_require,
+            out_dataclass=out_dataclass
         )
 
     @classmethod

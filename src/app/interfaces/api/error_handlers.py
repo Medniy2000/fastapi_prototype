@@ -50,17 +50,17 @@ def _create_error_resp(exc: AppException, status_code: int) -> JSONResponse:
 # ==========================================
 @app.exception_handler(ValidationError)
 async def exception_handler_validation_error(request: Request, exc: ValidationError) -> JSONResponse:
-    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_TYPE)
+    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 @app.exception_handler(NotFoundError)
 async def exception_handler_notfound_error(request: Request, exc: NotFoundError) -> JSONResponse:
-    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_TYPE)
+    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 @app.exception_handler(AlreadyExistsError)
 async def exception_handler_already_exists_error(request: Request, exc: AlreadyExistsError) -> JSONResponse:
-    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_TYPE)
+    return _create_error_resp(exc, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 @app.exception_handler(AuthenticationError)
@@ -89,7 +89,7 @@ async def exception_handler_fastapi_request_validation_error(
         "traceback": None,
     }
 
-    kwargs: Dict[str, Any] = {"status_code": status.HTTP_422_UNPROCESSABLE_TYPE, "content": content}
+    kwargs: Dict[str, Any] = {"status_code": status.HTTP_422_UNPROCESSABLE_ENTITY, "content": content}
 
     return JSONResponse(**kwargs)
 
