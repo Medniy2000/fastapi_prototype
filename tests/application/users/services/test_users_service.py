@@ -6,7 +6,7 @@ from typing import Any, List, Type
 
 import pytest
 
-from src.app.domain.users.aggregates.common import UserAggregate
+from src.app.domain.users.aggregates.user_agg import UserAggregate
 from src.app.domain.common.utils.common import generate_str
 from src.app.application.container import container as service_container
 from tests.fixtures.constants import USERS
